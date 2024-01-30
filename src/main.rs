@@ -1,5 +1,7 @@
 use std::{fs::File, io::Write};
 
+mod comb_filter;
+
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
     eprintln!("(c) 2024 Stephen Garrett & Ian Clester");
@@ -19,6 +21,10 @@ fn main() {
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
     let channels = spec.channels;
+
+    // TODO: Modify this to process audio in blocks using your comb filter and write the result to an audio file.
+    //       Use the following block size:
+    let block_size = 1024;
 
     // Read audio data and write it to the output text file (one column per channel)
     let mut out = File::create(&args[2]).expect("Unable to create file");
