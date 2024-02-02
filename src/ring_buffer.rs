@@ -44,7 +44,7 @@ impl<T: Copy + Default> RingBuffer<T> {
         todo!()
     }
 
-    pub fn get_write_index(&self) -> T {
+    pub fn get_write_index(&self) -> usize {
         todo!()
     }
 
