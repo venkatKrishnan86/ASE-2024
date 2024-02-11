@@ -40,7 +40,7 @@ impl<T: Copy + Default> RingBuffer<T> {
     }
 
     pub fn get(&self, offset: usize) -> T {
-        match self.tail {
+        match self.head {
             None => T::default(),
             Some(t) => self.ring_buffer[(t+offset)%self.capacity]
         }

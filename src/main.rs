@@ -28,15 +28,15 @@ fn main() {
    ring_buffer1.push(2);
    ring_buffer1.push(3);
    ring_buffer1.push(5); // Will not happen
-   println!("{}", ring_buffer1.len());
-   println!("{}", ring_buffer1.pop());
-   println!("{}", ring_buffer1.pop());
-   println!("{}", ring_buffer1.pop());
-   println!("{}", ring_buffer1.pop());
+   println!("Len: {}", ring_buffer1.len());
+   println!("Popped: {}", ring_buffer1.pop());
+   println!("Popped: {}", ring_buffer1.pop());
+   println!("Popped: {}", ring_buffer1.pop());
+   println!("Popped: {}", ring_buffer1.pop());
    println!("{:?}", ring_buffer1);
    ring_buffer1.push(47);
    ring_buffer1.push(48);
-   println!("{}", ring_buffer1.pop());
+   println!("Popped: {}", ring_buffer1.pop());
    println!("{:?}", ring_buffer1);
 
 
@@ -60,4 +60,27 @@ fn main() {
         write!(out, "{}{}", sample, if i % channels as usize == (channels - 1).into() { "\n" } else { " " }).unwrap();
     }
     // println!("{}", char::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn pop_test() {
+        let mut ring_buffer1 = ring_buffer::RingBuffer::<i16>::new(16);
+
+        for i in 0..16 {
+            ring_buffer1.push(i);
+            assert_eq!(ring_buffer1.len(), i as usize + 1);
+        }
+        for i in 0..4 {
+            assert_eq!(ring_buffer1.pop(), i);
+        }
+        ring_buffer1.push(5);
+        assert_eq!(ring_buffer1.pop(), 4);
+        assert_eq!(ring_buffer1.get(0), 5);
+        assert_eq!(ring_buffer1.get(1), 6);
+
+    }
 }
