@@ -3,7 +3,7 @@ use ringbuffer::{AllocRingBuffer, RingBuffer};
 pub struct CombFilter {
     // TODO: your code here
     filter_type: FilterType,
-    delay: f32,
+    max_delay_secs: f32,
     delayed_signal_amp_factor: f32,
     sample_rate_hz: f32,
     num_channels: usize,
@@ -31,7 +31,7 @@ impl CombFilter {
     pub fn new(filter_type: FilterType, max_delay_secs: f32, sample_rate_hz: f32, num_channels: usize) -> Self {
         Self {
             filter_type: filter_type,
-            delay: max_delay_secs,
+            max_delay_secs: max_delay_secs,
             delayed_signal_amp_factor: 0.5,
             sample_rate_hz: sample_rate_hz,
             num_channels: num_channels,
@@ -46,8 +46,8 @@ impl CombFilter {
     pub fn process(&mut self, input: &[&[f32]], output: &mut [&mut [f32]]) {
         match self.filter_type {
             FilterType::FIR => {
-                for (input_block, output_block) in input.iter().zip(output.iter_mut()) {
-                    for (input_sample, output_sample) in input_block.iter().zip(output_block.iter_mut()) {
+                for (input_channel, output_channel) in input.iter().zip(output.iter_mut()) {
+                    for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
                         *output_sample = input_sample + self.delayed_signal_amp_factor * self.delay_line.peek().unwrap_or(&0.0);
                         self.delay_line.push(*input_sample);
                     }
@@ -72,7 +72,7 @@ impl CombFilter {
                 }
                 self.delayed_signal_amp_factor = value
             },
-            FilterParam::Delay => self.delay = value
+            FilterParam::Delay => self.max_delay_secs = value
         }
         Ok(())
     }
@@ -80,14 +80,8 @@ impl CombFilter {
     pub fn get_param(&self, param: FilterParam) -> f32 {
         match param {
             FilterParam::Gain => self.delayed_signal_amp_factor,
-            FilterParam::Delay => self.delay
+            FilterParam::Delay => self.max_delay_secs
         }
-    }
-
-    pub fn vec_mul(v1: &[f32], v2: &[f32]) -> Vec<f32>
-    {
-        assert_eq!(v1.len(), v2.len());
-        v1.iter().zip(v2).map(|(&i1, &i2)| i1 * i2).collect()
     }
 
     // TODO: feel free to define other functions for your own use
