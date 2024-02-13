@@ -25,7 +25,7 @@ fn main() {
 
     // TODO: Modify this to process audio in blocks using your comb filter and write the result to an audio file.
     //       Use the following block size:
-    const block_size: usize = 1024;
+    let block_size: usize = 1024;
 
     // Read audio data and write it to the output text file (one column per channel)
     let mut out: File = File::create(&args[2]).expect("Unable to create file");
@@ -33,18 +33,20 @@ fn main() {
     //     let sample = sample.unwrap() as f32 / (1 << 15) as f32;
     //     write!(out, "{}{}", sample, if i % channels as usize == (channels - 1).into() { "\n" } else { " " }).unwrap();
     // }
-    let mut comb_filter_1 = comb_filter::CombFilter::new(comb_filter::FilterType::FIR, 0.05, 44100.0, channels as usize);
+
+    let mut comb_filter_1 = comb_filter::CombFilter::new(comb_filter::FilterType::FIR, 0.1, 44100.0, channels as usize);
     let mut channel_output_values: Vec<String> = Vec::new();
     for _ in 0..channels { 
         channel_output_values.push(String::from(""));
     }
 
     while let Ok(block) = reader.samples::<i16>().take(block_size*channels as usize).collect::<Result<Vec<_>, _>>() {
-        
-        let mut real_input_block: Vec<[f32; block_size]> = vec![[0.0; block_size]; channels as usize];
+        let curr_size = block.len();
+
+        let mut real_input_block: Vec<Vec<f32>> = vec![vec![0.0; curr_size/channels as usize]; channels as usize];
         let mut input_block_immut: Vec<&[f32]> = Vec::new();
 
-        let mut real_output_block: Vec<[f32; block_size]> = vec![[0.0; block_size]; channels as usize];
+        let mut real_output_block: Vec<Vec<f32>> = vec![vec![0.0; curr_size/channels as usize]; channels as usize];
         let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
 
         for (i, &sample) in block.iter().enumerate() {
@@ -72,7 +74,6 @@ fn main() {
         }
     }
     for channel_sample in channel_output_values {
-        write!(out, "{}", channel_sample);
+        write!(out, "{}", channel_sample).unwrap();
     }
-    // write!(out, "{}{}", sample, if i % channels as usize == (channels - 1).into() { "\n" } else { " " }).unwrap();
 }

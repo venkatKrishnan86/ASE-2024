@@ -29,18 +29,23 @@ pub enum Error {
 
 impl CombFilter {
     pub fn new(filter_type: FilterType, max_delay_secs: f32, sample_rate_hz: f32, num_channels: usize) -> Self {
-        Self {
+        let mut filter = Self {
             filter_type: filter_type,
             delay: max_delay_secs,
             delayed_signal_amp_factor: 0.5,
             sample_rate_hz: sample_rate_hz,
             num_channels: num_channels,
             delay_line: AllocRingBuffer::with_capacity((max_delay_secs * sample_rate_hz) as usize)
-        }
+        };
+        filter.reset();
+        filter
     }
 
     pub fn reset(&mut self) {
         self.delay_line.clear();
+        for _ in 0..(self.delay*self.sample_rate_hz) as usize {
+            self.delay_line.push(0.0);
+        }
     }
 
     pub fn process(&mut self, input: &[&[f32]], output: &mut [&mut [f32]]) {
@@ -48,7 +53,7 @@ impl CombFilter {
             FilterType::FIR => {
                 for (input_channel, output_channel) in input.iter().zip(output.iter_mut()) {
                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                        *output_sample = input_sample + self.delayed_signal_amp_factor * self.delay_line.peek().unwrap_or(&0.0);
+                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line.front().unwrap_or(&0.0);
                         self.delay_line.push(*input_sample);
                     }
                 }
@@ -56,7 +61,7 @@ impl CombFilter {
             FilterType::IIR => {
                 for (input_block, output_block) in input.iter().zip(output.iter_mut()) {
                     for (input_sample, output_sample) in input_block.iter().zip(output_block.iter_mut()) {
-                        *output_sample = input_sample + self.delayed_signal_amp_factor * self.delay_line.peek().unwrap();
+                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line.peek().unwrap();
                         self.delay_line.push(*output_sample);
                     }
                 }
@@ -157,5 +162,27 @@ mod tests {
             Ok(()) => (),
             Err(_) => panic!("Error")
         }
+    }
+
+    #[test]
+    fn test_process_IR_1() {
+        let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
+        
+        let mut input: [[f32; 10]; 1] = [[0.0; 10]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+        input[0][0] = 1.0;
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        assert_eq!(vec![[1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0]], output);
     }
 }
