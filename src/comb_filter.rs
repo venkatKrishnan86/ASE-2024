@@ -3,7 +3,7 @@ use ringbuffer::{AllocRingBuffer, RingBuffer};
 pub struct CombFilter {
     // TODO: your code here
     filter_type: FilterType,
-    max_delay_secs: f32,
+    delay: f32,
     delayed_signal_amp_factor: f32,
     sample_rate_hz: f32,
     num_channels: usize,
@@ -31,7 +31,7 @@ impl CombFilter {
     pub fn new(filter_type: FilterType, max_delay_secs: f32, sample_rate_hz: f32, num_channels: usize) -> Self {
         Self {
             filter_type: filter_type,
-            max_delay_secs: max_delay_secs,
+            delay: max_delay_secs,
             delayed_signal_amp_factor: 0.5,
             sample_rate_hz: sample_rate_hz,
             num_channels: num_channels,
@@ -72,7 +72,12 @@ impl CombFilter {
                 }
                 self.delayed_signal_amp_factor = value
             },
-            FilterParam::Delay => self.max_delay_secs = value
+            FilterParam::Delay => {
+                if value > self.delay_line.capacity() as f32/self.sample_rate_hz || value < 0.0 {
+                    return Err(Error::InvalidValue { param: param, value: value });
+                }
+                self.delay = value
+            }
         }
         Ok(())
     }
@@ -80,7 +85,7 @@ impl CombFilter {
     pub fn get_param(&self, param: FilterParam) -> f32 {
         match param {
             FilterParam::Gain => self.delayed_signal_amp_factor,
-            FilterParam::Delay => self.max_delay_secs
+            FilterParam::Delay => self.delay
         }
     }
 
@@ -121,19 +126,31 @@ mod tests {
     }
 
     #[test]
-    fn setting_delay_params_for_comb_filter() {
+    #[should_panic]
+    fn setting_negative_delay_params_for_comb_filter() {
         let mut filter = CombFilter::new(FilterType::FIR, 0.1, 100.0, 2);
         let result = filter.set_param(FilterParam::Delay, -1.2);
         match result {
             Ok(()) => (),
             Err(_) => panic!("Error")
         }
+    }
 
-        let result = filter.set_param(FilterParam::Delay, 0.2);
+    #[test]
+    fn setting_delay_params_for_comb_filter() {
+        let mut filter = CombFilter::new(FilterType::FIR, 0.1, 100.0, 2);
+
+        let result = filter.set_param(FilterParam::Delay, 0.02);
         match result {
             Ok(()) => (),
             Err(_) => panic!("Error")
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn setting_larger_delay_params_for_comb_filter() {
+        let mut filter = CombFilter::new(FilterType::FIR, 0.1, 100.0, 2);
 
         let result = filter.set_param(FilterParam::Delay, 1.2);
         match result {
