@@ -1,8 +1,3 @@
-use hound::WavWriter;
-use utils::ProcessBlocks;
-use comb_filter::{CombFilter, FilterType};
-use std::{io::BufWriter, fs::File};
-
 mod comb_filter;
 mod utils;
 
@@ -35,14 +30,5 @@ fn main() {
     //       Use the following block size:
     let block_size: usize = 32;
 
-    let mut comb_filter_1 = CombFilter::new(FilterType::FIR, 0.1, spec.sample_rate as f32, channels);
-    let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(&args[2], spec).expect("Unable to create file");
-
-    while let Ok(block) = reader.samples::<i16>().take(block_size*channels as usize).collect::<Result<Vec<_>, _>>() {
-        let mut process_block = ProcessBlocks::new(&block, &channels);
-        let (input_address, mut output_address) = process_block.create_and_write_addresses();
-        comb_filter_1.process(&input_address, &mut output_address);
-        process_block.write_output_samples(&mut writer).unwrap();
-        if block.len() < block_size*channels as usize { break }
-    }
+    comb_filter::process_and_write_audio(&mut reader, block_size, channels, &args[2], spec);
 }

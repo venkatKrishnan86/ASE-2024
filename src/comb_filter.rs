@@ -1,3 +1,8 @@
+use std::io::{BufReader, BufWriter};
+use std::fs::File;
+use crate::utils;
+
+use hound::{WavReader, WavSpec, WavWriter};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 pub struct CombFilter {
@@ -101,11 +106,23 @@ impl CombFilter {
             FilterParam::Delay => self.delay
         }
     }
-
+    
     // TODO: feel free to define other functions for your own use
 }
 
 // TODO: feel free to define other types (here or in other modules) for your own use
+pub fn process_and_write_audio(reader: &mut WavReader<BufReader<File>>, block_size: usize, channels: usize, output_file: &String, spec: WavSpec) {
+    let mut comb_filter_1 = CombFilter::new(FilterType::IIR, 0.1, spec.sample_rate as f32, channels);
+    let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(output_file, spec).expect("Unable to create file");
+
+    while let Ok(block) = reader.samples::<i16>().take(block_size*channels).collect::<Result<Vec<_>, _>>() {
+        let mut process_block = utils::ProcessBlocks::new(&block, &channels);
+        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+        comb_filter_1.process(&input_address, &mut output_address);
+        process_block.write_output_samples(&mut writer).unwrap();
+        if block.len() < block_size*channels as usize { break }
+    }
+}
 
 #[cfg(test)]
 mod tests {
