@@ -3,7 +3,7 @@
 **Name**: Venkatakrishnan V K
 
 ## Results
-The audios which were tested is stored in the `audio` directory, and the resulting files are in `results` directory in their individual folder depending on whether IIR (`iir` folder) or FIR (`fir` folder) was used.
+The audios which were tested are stored in the `audio` directory, and the resulting files are in `results` directory in their individual folder depending on whether IIR (`iir` folder) or FIR (`fir` folder) comb filter was used.
 
 Python audios are also in the result folder in `python_iir` and `python_fir`
 
