@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 hound = "3.5.1"
 ringbuffer = "0.15.0"
+rand = "0.8.5"
