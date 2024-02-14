@@ -67,7 +67,7 @@ pub fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
 }
 
 pub fn f32_to_i16(value: f32) -> i16 {
-    assert!(value>=-1.0 && value<1.0);
+    // assert!(value>=-1.0 && value<1.0);
     (value*(-(i16::MIN as f32))) as i16
 }
 
@@ -160,14 +160,15 @@ mod tests{
     }
 
     #[test]
-    #[should_panic]
     fn test_f32_to_i16_at_one() {
-        f32_to_i16(1.0);
+        assert_eq!(f32_to_i16(1.01), i16::MAX);
+        assert_eq!(f32_to_i16(1.0), i16::MAX);
+        assert_eq!(f32_to_i16(143.0), i16::MAX);
     }
 
     #[test]
-    #[should_panic]
     fn test_f32_to_i16_for_less_than_minus_one() {
-        f32_to_i16(-1.01);
+        assert_eq!(f32_to_i16(-1.01), i16::MIN);
+        assert_eq!(f32_to_i16(-2.0432), i16::MIN);
     }
 }
