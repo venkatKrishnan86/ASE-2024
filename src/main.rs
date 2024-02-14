@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, os::unix::process};
+use std::{fs::File, io::Write};
 
 use utils::ProcessBlocks;
 
@@ -42,7 +42,7 @@ fn main() {
     while let Ok(block) = reader.samples::<i16>().take(block_size*channels as usize).collect::<Result<Vec<_>, _>>() {
         let mut process_block = ProcessBlocks::new(&block, &channels);
         process_block.convert_i16_samples_to_f32(&block, &channels);
-        let (mut input_address, mut output_address) = process_block.create_and_write_addresses();
+        let (input_address, mut output_address) = process_block.create_and_write_addresses();
 
         comb_filter_1.process(&input_address, &mut output_address);
 
