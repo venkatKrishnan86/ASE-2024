@@ -543,233 +543,251 @@ mod tests {
             // assert_eq!(actual_right, final_output_right);
         }
 
-        #[test]
-        fn different_buffer_sizes_mono_iir_test() {
-            let channels: usize = 1;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output: Vec<Vec<f32>> = vec![Vec::new(); 6];
+        /// TEST: A random signal must be processed the exact same way, and must yield the exact same results
+        /// These tests within this `mod` achieves that
+        mod different_buffer_sizes_and_channels_tests {
+            use super::*;
 
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
+            /// Channels: Mono
+            /// Filter Type: IIR
+            #[test]
+            fn different_buffer_sizes_mono_iir_test() {
+                let channels: usize = 1;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output: Vec<Vec<f32>> = vec![Vec::new(); 6];
 
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for values in process_block.output_block[0].clone() {
-                        final_output[i].push(values);
-                    }
-                    samples_address = rest;
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
                 }
-            }
-            for i in 0..5 {
-                for (value_1, value_2) in final_output[i].iter().zip(final_output[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-            }
-        }
 
-        #[test]
-        fn different_buffer_sizes_mono_fir_test() {
-            let channels: usize = 1;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output: Vec<Vec<f32>> = vec![Vec::new(); 6];
-
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
-
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for values in process_block.output_block[0].clone() {
-                        final_output[i].push(values);
-                    }
-                    samples_address = rest;
-                }
-            }
-            for i in 0..5 {
-                for (value_1, value_2) in final_output[i].iter().zip(final_output[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-            }
-        }
-
-        #[test]
-        fn different_buffer_sizes_stereo_iir_test() {
-            let channels: usize = 2;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output_left: Vec<Vec<f32>> = vec![Vec::new(); 6];
-            let mut final_output_right: Vec<Vec<f32>> = vec![Vec::new(); 6];
-
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
-
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for values in process_block.output_block[0].clone() {
-                        final_output_left[i].push(values);
-                    }
-                    for values in process_block.output_block[1].clone() {
-                        final_output_right[i].push(values);
-                    }
-                    samples_address = rest;
-                }
-            }
-            for i in 0..5 {
-                for (value_1, value_2) in final_output_left[i].iter().zip(final_output_left[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-                for (value_1, value_2) in final_output_right[i].iter().zip(final_output_right[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-            }
-        }
-
-        #[test]
-        fn different_buffer_sizes_stereo_fir_test() {
-            let channels: usize = 2;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output_left: Vec<Vec<f32>> = vec![Vec::new(); 6];
-            let mut final_output_right: Vec<Vec<f32>> = vec![Vec::new(); 6];
-
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
-
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for values in process_block.output_block[0].clone() {
-                        final_output_left[i].push(values);
-                    }
-                    for values in process_block.output_block[1].clone() {
-                        final_output_right[i].push(values);
-                    }
-                    samples_address = rest;
-                }
-            }
-            for i in 0..5 {
-                for (value_1, value_2) in final_output_left[i].iter().zip(final_output_left[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-                for (value_1, value_2) in final_output_right[i].iter().zip(final_output_right[i+1].iter()) {
-                    assert!(is_close(*value_1, *value_2));
-                }
-            }
-        }
-
-        #[test]
-        fn different_buffer_sizes_spatial_iir_test() {
-            let channels: usize = 5;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output_spatial: Vec<Vec<Vec<f32>>> = vec![vec![Vec::new(); 6]; channels];
-
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
-
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for (channel_num, final_output_channel) in final_output_spatial.iter_mut().enumerate() {
-                        for values in process_block.output_block[channel_num].clone() {
-                            final_output_channel[i].push(values);
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for values in process_block.output_block[0].clone() {
+                            final_output[i].push(values);
                         }
+                        samples_address = rest;
                     }
-                    samples_address = rest;
                 }
-            }
-            for i in 0..5 {
-                for final_output_channel in final_output_spatial.iter() {
-                    for (value_1, value_2) in final_output_channel[i].iter().zip(final_output_channel[i+1].iter()) {
+                for i in 0..5 {
+                    for (value_1, value_2) in final_output[i].iter().zip(final_output[i+1].iter()) {
                         assert!(is_close(*value_1, *value_2));
                     }
                 }
             }
-        }
 
-        #[test]
-        fn different_buffer_sizes_spatial_fir_test() {
-            let channels: usize = 5;
-            let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
-            let mut final_output_spatial: Vec<Vec<Vec<f32>>> = vec![vec![Vec::new(); 6]; channels];
+            /// Channels: Mono
+            /// Filter Type: FIR
+            #[test]
+            fn different_buffer_sizes_mono_fir_test() {
+                let channels: usize = 1;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output: Vec<Vec<f32>> = vec![Vec::new(); 6];
 
-            let mut input: [i16; 3000] = [0; 3000];
-            for i in &mut input {
-                *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
-            }
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
+                }
 
-            for (i, block_size) in buffer_sizes.iter().enumerate() {
-                let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
-                let temp_input = input.clone();
-                let mut samples_address = &temp_input[..];
-                while !samples_address.is_empty() {
-                    let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
-                    let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
-    
-                    let (input_address, mut output_address) = process_block.create_and_write_addresses();
-                    filter.process(&input_address, &mut output_address);
-                    
-                    for (channel_num, final_output_channel) in final_output_spatial.iter_mut().enumerate() {
-                        for values in process_block.output_block[channel_num].clone() {
-                            final_output_channel[i].push(values);
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for values in process_block.output_block[0].clone() {
+                            final_output[i].push(values);
                         }
+                        samples_address = rest;
                     }
-                    samples_address = rest;
+                }
+                for i in 0..5 {
+                    for (value_1, value_2) in final_output[i].iter().zip(final_output[i+1].iter()) {
+                        assert!(is_close(*value_1, *value_2));
+                    }
                 }
             }
-            for i in 0..5 {
-                for final_output_channel in final_output_spatial.iter() {
-                    for (value_1, value_2) in final_output_channel[i].iter().zip(final_output_channel[i+1].iter()) {
+
+            /// Channels: Stereo
+            /// Filter Type: IIR
+            #[test]
+            fn different_buffer_sizes_stereo_iir_test() {
+                let channels: usize = 2;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output_left: Vec<Vec<f32>> = vec![Vec::new(); 6];
+                let mut final_output_right: Vec<Vec<f32>> = vec![Vec::new(); 6];
+
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
+                }
+
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for values in process_block.output_block[0].clone() {
+                            final_output_left[i].push(values);
+                        }
+                        for values in process_block.output_block[1].clone() {
+                            final_output_right[i].push(values);
+                        }
+                        samples_address = rest;
+                    }
+                }
+                for i in 0..5 {
+                    for (value_1, value_2) in final_output_left[i].iter().zip(final_output_left[i+1].iter()) {
                         assert!(is_close(*value_1, *value_2));
+                    }
+                    for (value_1, value_2) in final_output_right[i].iter().zip(final_output_right[i+1].iter()) {
+                        assert!(is_close(*value_1, *value_2));
+                    }
+                }
+            }
+
+            /// Channels: Stereo
+            /// Filter Type: FIR
+            #[test]
+            fn different_buffer_sizes_stereo_fir_test() {
+                let channels: usize = 2;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output_left: Vec<Vec<f32>> = vec![Vec::new(); 6];
+                let mut final_output_right: Vec<Vec<f32>> = vec![Vec::new(); 6];
+
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
+                }
+
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for values in process_block.output_block[0].clone() {
+                            final_output_left[i].push(values);
+                        }
+                        for values in process_block.output_block[1].clone() {
+                            final_output_right[i].push(values);
+                        }
+                        samples_address = rest;
+                    }
+                }
+                for i in 0..5 {
+                    for (value_1, value_2) in final_output_left[i].iter().zip(final_output_left[i+1].iter()) {
+                        assert!(is_close(*value_1, *value_2));
+                    }
+                    for (value_1, value_2) in final_output_right[i].iter().zip(final_output_right[i+1].iter()) {
+                        assert!(is_close(*value_1, *value_2));
+                    }
+                }
+            }
+
+            /// Channels: Spatial (5 channel)
+            /// Filter Type: IIR
+            #[test]
+            fn different_buffer_sizes_spatial_iir_test() {
+                let channels: usize = 5;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output_spatial: Vec<Vec<Vec<f32>>> = vec![vec![Vec::new(); 6]; channels];
+
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
+                }
+
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::IIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for (channel_num, final_output_channel) in final_output_spatial.iter_mut().enumerate() {
+                            for values in process_block.output_block[channel_num].clone() {
+                                final_output_channel[i].push(values);
+                            }
+                        }
+                        samples_address = rest;
+                    }
+                }
+                for i in 0..5 {
+                    for final_output_channel in final_output_spatial.iter() {
+                        for (value_1, value_2) in final_output_channel[i].iter().zip(final_output_channel[i+1].iter()) {
+                            assert!(is_close(*value_1, *value_2));
+                        }
+                    }
+                }
+            }
+
+            /// Channels: Spatial (5 channel)
+            /// Filter Type: FIR
+            #[test]
+            fn different_buffer_sizes_spatial_fir_test() {
+                let channels: usize = 5;
+                let buffer_sizes: [usize; 6] = [32, 64, 128, 256, 512, 1024];
+                let mut final_output_spatial: Vec<Vec<Vec<f32>>> = vec![vec![Vec::new(); 6]; channels];
+
+                let mut input: [i16; 3000] = [0; 3000];
+                for i in &mut input {
+                    *i = utils::f32_to_i16((rand::random::<f32>()*2.0) - 1.0);
+                }
+
+                for (i, block_size) in buffer_sizes.iter().enumerate() {
+                    let mut filter = CombFilter::new(FilterType::FIR, 0.5, 100.0, channels);
+                    let temp_input = input.clone();
+                    let mut samples_address = &temp_input[..];
+                    while !samples_address.is_empty() {
+                        let (block, rest) = samples_address.split_at(std::cmp::min(block_size*channels, samples_address.len()));
+                        let mut process_block = ProcessBlocks::new(&block.to_vec(), &channels);
+        
+                        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+                        filter.process(&input_address, &mut output_address);
+                        
+                        for (channel_num, final_output_channel) in final_output_spatial.iter_mut().enumerate() {
+                            for values in process_block.output_block[channel_num].clone() {
+                                final_output_channel[i].push(values);
+                            }
+                        }
+                        samples_address = rest;
+                    }
+                }
+                for i in 0..5 {
+                    for final_output_channel in final_output_spatial.iter() {
+                        for (value_1, value_2) in final_output_channel[i].iter().zip(final_output_channel[i+1].iter()) {
+                            assert!(is_close(*value_1, *value_2));
+                        }
                     }
                 }
             }
