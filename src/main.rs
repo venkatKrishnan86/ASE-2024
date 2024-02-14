@@ -17,7 +17,7 @@ fn main() {
     }
 
     // Open the input wave file
-    let mut reader = hound::WavReader::open(&args[1]).unwrap();
+    let mut reader = hound::WavReader::open(&args[1]).expect("Could not read file");
     let spec = reader.spec();
     let channels: usize = spec.channels as usize;
 
@@ -30,5 +30,13 @@ fn main() {
     //       Use the following block size:
     let block_size: usize = 1024;
 
-    comb_filter::process_and_write_audio(&mut reader, block_size, channels, &args[2], spec);
+    comb_filter::process_and_write_audio(
+        &mut reader, 
+        block_size, 
+        channels,
+        &args[2], 
+        spec, 
+        comb_filter::FilterType::IIR, 
+        0.8
+    );
 }
