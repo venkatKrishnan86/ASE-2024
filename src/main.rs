@@ -26,11 +26,16 @@ fn main() {
     let spec = reader.spec();
     let channels: usize = spec.channels as usize;
 
+    if spec.bits_per_sample!=16 {
+        eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", spec.bits_per_sample);
+        return
+    }
+
     // TODO: Modify this to process audio in blocks using your comb filter and write the result to an audio file.
     //       Use the following block size:
-    let block_size: usize = 1024*64;
+    let block_size: usize = 32;
 
-    let mut comb_filter_1 = CombFilter::new(FilterType::FIR, 0.1, 44100.0, channels);
+    let mut comb_filter_1 = CombFilter::new(FilterType::FIR, 0.1, spec.sample_rate as f32, channels);
     let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(&args[2], spec).expect("Unable to create file");
 
     while let Ok(block) = reader.samples::<i16>().take(block_size*channels as usize).collect::<Result<Vec<_>, _>>() {
