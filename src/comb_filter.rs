@@ -54,6 +54,7 @@ impl CombFilter {
                 for (input_channel, output_channel) in input.iter().zip(output.iter_mut()) {
                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
                         *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line.front().unwrap_or(&0.0);
+                        self.delay_line.dequeue();
                         self.delay_line.push(*input_sample);
                     }
                 }
@@ -61,7 +62,8 @@ impl CombFilter {
             FilterType::IIR => {
                 for (input_block, output_block) in input.iter().zip(output.iter_mut()) {
                     for (input_sample, output_sample) in input_block.iter().zip(output_block.iter_mut()) {
-                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line.peek().unwrap();
+                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line.front().unwrap_or(&0.0);
+                        self.delay_line.dequeue();
                         self.delay_line.push(*output_sample);
                     }
                 }
@@ -81,7 +83,8 @@ impl CombFilter {
                 if value > self.delay_line.capacity() as f32/self.sample_rate_hz || value < 0.0 {
                     return Err(Error::InvalidValue { param: param, value: value });
                 }
-                self.delay = value
+                self.delay = value;
+                self.reset();
             }
         }
         Ok(())
@@ -102,6 +105,7 @@ impl CombFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils;
 
     #[should_panic]
     #[test]
@@ -165,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_IR_1() {
+    fn test_process_FIR_Impulse() {
         let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
         
         let mut input: [[f32; 10]; 1] = [[0.0; 10]];
@@ -184,5 +188,145 @@ mod tests {
 
         // Checked on python implementation
         assert_eq!(vec![[1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0]], output);
+    }
+
+    #[test]
+    fn test_process_FIR_Impulse_modified_delay() {
+        let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
+        filter.set_param(FilterParam::Delay, 0.3).unwrap();
+        
+        let mut input: [[f32; 10]; 1] = [[0.0; 10]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+        input[0][0] = 1.0;
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        assert_eq!(vec![[1.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]], output);
+    }
+
+    #[test]
+    fn test_process_IIR_Impulse() {
+        let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
+        
+        let mut input: [[f32; 10]; 1] = [[0.0; 10]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+        input[0][0] = 1.0;
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        assert_eq!(vec![[1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0]], output);
+    }
+
+    #[test]
+    fn test_process_IIR_Impulse_modified_delay() {
+        let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
+        filter.set_param(FilterParam::Delay, 0.3).unwrap();
+        
+        let mut input: [[f32; 10]; 1] = [[0.0; 10]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+        input[0][0] = 1.0;
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        assert_eq!(vec![[1.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.25, 0.0, 0.0, 0.125]], output);
+    }
+
+    #[test]
+    fn test_process_FIR_Impulse_rand_x_mono() {
+        let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
+        filter.set_param(FilterParam::Delay, 0.2).unwrap();
+
+        let mut input: [[f32; 10]; 1] = [[
+            0.35718214,
+            0.71631462,
+            0.17056465,
+            0.00772361,
+            0.29818118,
+            0.197505,
+            0.76061135,
+            0.08108575,
+            0.64278864,
+            0.93702414
+        ]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        let actual_value: [f32; 10] = [0.35718214, 0.71631462, 0.34915572, 0.36588091, 0.3834635, 0.2013668 , 0.90970194, 0.17983825, 1.02309432, 0.97756701];
+        for (a,b) in output[0].into_iter().zip(actual_value){
+            assert!(utils::is_close(a, b));
+        }
+    }
+
+    #[test]
+    fn test_process_IIR_Impulse_rand_x_mono() {
+        let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
+        filter.set_param(FilterParam::Delay, 0.2).unwrap();
+
+        let mut input: [[f32; 10]; 1] = [[
+            0.35718214,
+            0.71631462,
+            0.17056465,
+            0.00772361,
+            0.29818118,
+            0.197505,
+            0.76061135,
+            0.08108575,
+            0.64278864,
+            0.93702414
+        ]];
+        let mut output: [[f32; 10]; 1] = [[0.0; 10]];
+
+        let mut input_block_immut: Vec<&[f32]> = Vec::new();
+        let mut output_block_mut: Vec<&mut [f32]> = Vec::new();
+
+        for (input_blocks, output_blocks) in input.iter().zip(output.iter_mut()) {
+            input_block_immut.push(input_blocks);
+            output_block_mut.push(output_blocks);
+        }
+
+        filter.process(&input_block_immut, &mut output_block_mut);
+
+        // Checked on python implementation
+        let actual_value: [f32; 10] = [0.35718214, 0.71631462, 0.34915572, 0.36588091, 0.47275904, 0.38044546, 0.99699087, 0.27130848, 1.14128408, 1.07267838];
+        for (a,b) in output[0].into_iter().zip(actual_value){
+            assert!(utils::is_close(a, b));
+        }
     }
 }
