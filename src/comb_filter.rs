@@ -119,10 +119,11 @@ pub fn process_and_write_audio(
     output_file: &String, 
     spec: WavSpec, 
     filter_type: FilterType,
-    gain: f32
+    gain: f32,
+    max_delay_secs: f32
 ){
 
-    let mut comb_filter_1: CombFilter = CombFilter::new(filter_type, 0.1, spec.sample_rate as f32, channels);
+    let mut comb_filter_1: CombFilter = CombFilter::new(filter_type, max_delay_secs, spec.sample_rate as f32, channels);
     comb_filter_1.set_param(FilterParam::Gain, gain).expect("Incorrect gain value");
     let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(output_file, spec).expect("Unable to create file");
 

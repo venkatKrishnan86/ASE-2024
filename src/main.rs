@@ -37,6 +37,7 @@ fn main() {
         &args[2], 
         spec, 
         comb_filter::FilterType::IIR, 
-        0.8
+        0.8,
+        0.1
     );
 }
