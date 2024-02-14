@@ -28,7 +28,7 @@ fn main() {
 
     // TODO: Modify this to process audio in blocks using your comb filter and write the result to an audio file.
     //       Use the following block size:
-    let block_size: usize = 32;
+    let block_size: usize = 1024;
 
     comb_filter::process_and_write_audio(&mut reader, block_size, channels, &args[2], spec);
 }
