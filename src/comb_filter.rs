@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_FIR_Impulse() {
+    fn test_process_fir_impulse() {
         let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
         
         let mut input: [[f32; 10]; 1] = [[0.0; 10]];
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_FIR_Impulse_modified_delay() {
+    fn test_process_fir_impulse_modified_delay() {
         let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
         filter.set_param(FilterParam::Delay, 0.3).unwrap();
         
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_IIR_Impulse() {
+    fn test_process_iir_impulse() {
         let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
         
         let mut input: [[f32; 10]; 1] = [[0.0; 10]];
@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_IIR_Impulse_modified_delay() {
+    fn test_process_iir_impulse_modified_delay() {
         let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
         filter.set_param(FilterParam::Delay, 0.3).unwrap();
         
@@ -259,11 +259,11 @@ mod tests {
     }
 
     #[test]
-    fn test_process_FIR_Impulse_rand_x_mono() {
+    fn test_process_fir_impulse_rand_x_mono() {
         let mut filter = CombFilter::new(FilterType::FIR, 0.5, 10.0, 1);
         filter.set_param(FilterParam::Delay, 0.2).unwrap();
 
-        let mut input: [[f32; 10]; 1] = [[
+        let input: [[f32; 10]; 1] = [[
             0.35718214,
             0.71631462,
             0.17056465,
@@ -295,11 +295,11 @@ mod tests {
     }
 
     #[test]
-    fn test_process_IIR_Impulse_rand_x_mono() {
+    fn test_process_iir_impulse_rand_x_mono() {
         let mut filter = CombFilter::new(FilterType::IIR, 0.5, 10.0, 1);
         filter.set_param(FilterParam::Delay, 0.2).unwrap();
 
-        let mut input: [[f32; 10]; 1] = [[
+        let input: [[f32; 10]; 1] = [[
             0.35718214,
             0.71631462,
             0.17056465,
