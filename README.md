@@ -9,13 +9,17 @@ Python audios are also in the result folder in `python_iir` and `python_fir`
 
 ## Tests
 
-In total, xx tests have been written. The corresponding tests for the questions are as follows -
+In total, **38** tests have been written. The corresponding tests for the questions are as follows -
 1. **FIR: Output is zero if input freq matches feedforward**
-
+- Test *passed*
+- Function written in `combiflter.rs`
+- Function: `zero_output_input_freq_matching_feedforward()`
 
 
 2. **IIR: amount of magnitude increase/decrease if input freq matches feedback**
-
+- Test *passed*, checks for no overflow in i16 variables since amplitude exponentially increases on IIR feeding back with the same frequency
+- Function written in `combiflter.rs`
+- Function: `iir_magnitude_increase_for_input_freq_matching_feedforward()`
 
 
 3. **FIR/IIR: correct result for VARYING input block size**

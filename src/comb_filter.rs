@@ -138,8 +138,13 @@ pub fn process_and_write_audio(
 
 #[cfg(test)]
 mod tests {
+    use core::num;
+    use std::f32::consts::PI;
+
+    use rand::seq::index::sample;
+
     use super::*;
-    use crate::utils::{self, is_close, ProcessBlocks};
+    use crate::utils::{self, f32_to_i16, is_close, ProcessBlocks};
 
     #[should_panic]
     #[test]
@@ -857,5 +862,60 @@ mod tests {
         for (a,b) in final_output.into_iter().zip(actual_value){
             assert!(utils::is_close(a, b));
         }
+    }
+
+    #[test]
+    fn zero_output_input_freq_matching_feedforward() {
+        let mut v: Vec<f32> = Vec::new();
+        let num_samples = 100;
+        let freq = 10.0;
+        for i in 0..num_samples {
+            v.push(f32::sin(2.0*PI*(i as f32/num_samples as f32) * freq));
+        }
+
+        let mut filter = CombFilter::new(FilterType::FIR, 1.0/(2.0*freq), num_samples as f32, 1);
+        filter.set_param(FilterParam::Gain, 1.0).unwrap();
+        
+        let mut process_block = ProcessBlocks::new(&vec![0; num_samples], &1);
+        process_block.input_block = vec![v];
+        process_block.output_block = vec![vec![0.0; num_samples]];
+
+        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+
+        filter.process(&input_address, &mut output_address);
+
+        let output_array = process_block.output_block[0].clone();
+
+        // Checking for 0s after the half frequency point
+        for value in output_array[(freq/2.0) as usize..].iter() {
+            assert!(f32::abs(*value) < 1e-4); // Since the subtraction is not accurate
+        }
+    }
+
+    #[test]
+    fn iir_magnitude_increase_for_input_freq_matching_feedforward() {
+        let mut v: Vec<f32> = Vec::new();
+        let num_samples = 1000;
+        let freq = 100.0;
+        for i in 0..num_samples {
+            v.push(f32::sin(2.0*PI*(i as f32/num_samples as f32) * freq));
+        }
+
+        let mut filter = CombFilter::new(FilterType::IIR, 1.0/(freq), num_samples as f32, 1);
+        filter.set_param(FilterParam::Gain, 1.0).unwrap();
+        
+        let mut process_block = ProcessBlocks::new(&vec![0; num_samples], &1);
+        process_block.input_block = vec![v];
+        process_block.output_block = vec![vec![0.0; num_samples]];
+
+        let (input_address, mut output_address) = process_block.create_and_write_addresses();
+
+        filter.process(&input_address, &mut output_address);
+
+        let output_array = process_block.output_block[0].clone();
+
+        let final_i16_output: Vec<i16> = output_array.iter().map(|value| f32_to_i16(*value)).collect();
+        assert_eq!(i16::MIN, *final_i16_output.iter().min().unwrap_or(&0));
+        assert_eq!(i16::MAX, *final_i16_output.iter().max().unwrap_or(&0));
     }
 }
