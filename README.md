@@ -2,6 +2,17 @@
 
 **Name**: Venkatakrishnan V K
 
+- Default Gain: **0.8**
+- Default Delay: **0.1 sec**
+- Default FilterType: **IIR**
+
+To change any parameter -
+1. Go to `src/main.rs`
+2. Change the **last 3** parameters in `combfilter::process_and_write_audio()`, written in the end of `main.rs`
+    - `filter_type`: Filter Type
+    - `gain`: Gain
+    - `max_delay_secs`: Delay (s)
+
 ## Results
 The audios which were tested are stored in the `audio` directory, and the resulting files are in `results` directory in their individual folder depending on whether IIR (`iir` folder) or FIR (`fir` folder) comb filter was used.
 
