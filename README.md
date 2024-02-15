@@ -23,6 +23,7 @@ In total, **38** tests have been written. The corresponding tests for the questi
 
 
 3. **FIR/IIR: correct result for VARYING input block size**
+
 Varying block sizes test is written for *mono*, *stereo* as well as *spatial* (5 channel) audio. Test functions are in `combfilter.rs` -
 - **IIR**: 
     - *Mono*: `different_buffer_sizes_mono_iir_test()`
@@ -34,9 +35,11 @@ Varying block sizes test is written for *mono*, *stereo* as well as *spatial* (5
     - *Spatial*: `different_buffer_sizes_spatial_fir_test()`
 
 4. **FIR/IIR: correct processing for zero input signal**
+
 Test functions are in `combfilter.rs` -
 - **IIR**: `zero_input_multi_channel_signal_test_iir()`
 - **FIR**: `zero_input_multi_channel_signal_test_fir()`
 
 5. **At least one more additional MEANINGFUL test to verify your filter implementation**
-The rest of the tests are in `combfilter.rs` and `utils/mod.rs`
+
+The rest of the unit tests are in `combfilter.rs` and `utils/mod.rs`
