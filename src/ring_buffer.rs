@@ -32,21 +32,43 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
-    pub fn peek(&self) -> T {
+    pub fn peek(&self) -> Option<T> {
         match self.tail {
-            None => T::default(),
-            Some(t) => self.ring_buffer[t]
+            None => None,
+            Some(t) => Some(self.ring_buffer[t])
         }
     }
 
-    pub fn get(&self, offset: usize) -> T {
-        match self.tail {
-            None => T::default(),
-            Some(t) => self.ring_buffer[(t+offset)%self.capacity]
+    pub fn get(&self, offset: usize) -> Option<T> {
+        if offset >= self.len() - 1{ return None }
+        match self.head {
+            None => None,
+            Some(t) => Some(self.ring_buffer[(t+offset)%self.capacity])
         }
     }
 
-    // `push` and `pop` write/read and advance the indices.
+    /// Pushes a value onto the ring buffer. Also this operation advances the tail index by one.
+    ///
+    /// Note: If the buffer is full, nothing will happen.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value to be pushed onto the buffer.
+    ///
+    /// # Returns
+    ///
+    /// * ()
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut buffer = RingBuffer::<i16>::new(3);
+    /// for i in 1..5 {
+    ///     buffer.push(i);
+    /// }
+    /// 
+    /// assert_eq!(vec![1,2,3], buffer.ring_buffer);
+    /// ```
     pub fn push(&mut self, value: T) {
         match self.len() == self.capacity() {
             true => (),
@@ -65,9 +87,9 @@ impl<T: Copy + Default> RingBuffer<T> {
         
     }
 
-    pub fn pop(&mut self) -> T {
+    pub fn pop(&mut self) -> Option<T> {
         match self.len() == 0 {
-            true => T::default(),
+            true => None,
             false => {
                 let popped_val = self.ring_buffer[self.head.unwrap()];
                 if self.head.unwrap() == self.tail.unwrap() {
@@ -76,7 +98,7 @@ impl<T: Copy + Default> RingBuffer<T> {
                 } else {
                     self.head = Some((self.head.unwrap() + 1)%self.capacity);
                 }
-                popped_val
+                Some(popped_val)
             }
         }
     }
@@ -112,7 +134,83 @@ impl<T: Copy + Default> RingBuffer<T> {
     }
 
     pub fn capacity(&self) -> usize {
-        // Return the length of the internal buffer.
         self.capacity
     }
+}
+
+impl RingBuffer<f32> {
+    // Return the value at at an offset from the current read index.
+    // To handle fractional offsets, linearly interpolate between adjacent values. 
+    pub fn get_frac(&self, offset: f32) -> Option<f32> {
+        assert!(offset>=0.0, "Offset must be greater than or equal to 0");
+        if offset >= self.len() as f32 - 1.0 { return None }
+        match self.head {
+            None => None,
+            Some(t) => Some(
+                (1.0-(offset - offset.trunc())) * self.ring_buffer[(t+offset.trunc() as usize)%self.capacity] 
+                + (offset - offset.trunc()) * self.ring_buffer[(t+offset.trunc() as usize + 1)%self.capacity]
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod push_tests {
+        use super::*;
+
+        #[test]
+        fn test_1() {
+            let mut buffer = RingBuffer::<i16>::new(3);
+            for i in 1..5 {
+                buffer.push(i);
+            }
+            
+            assert_eq!(vec![1,2,3], buffer.ring_buffer);
+        }
+    }
+
+    mod get_frac_tests {
+        use super::*;
+
+        #[test]
+        fn test_1() {
+            let mut buffer = RingBuffer::<f32>::new(3);
+            for i in 1..4 {
+                buffer.push(i as f32);
+            }
+            assert_eq!(1.5, buffer.get_frac(0.5).unwrap());
+        }
+
+        #[test]
+        fn test_2() {
+            let mut buffer = RingBuffer::<f32>::new(3);
+            for i in 1..4 {
+                buffer.push(i as f32);
+            }
+            assert_eq!(2.8, buffer.get_frac(1.8).unwrap());
+        }
+
+        #[test]
+        #[should_panic]
+        fn test_3() {
+            let mut buffer = RingBuffer::<f32>::new(3);
+            for i in 1..4 {
+                buffer.push(i as f32);
+            }
+            let _ = buffer.get_frac(-0.2);
+        }
+
+        #[test]
+        fn test_4() {
+            let mut buffer = RingBuffer::<f32>::new(3);
+            for i in 1..4 {
+                buffer.push(i as f32);
+            }
+            assert_eq!(None, buffer.get_frac(2.1));
+        }
+    }
+    
 }
