@@ -1,17 +1,5 @@
 use crate::ring_buffer::RingBuffer;
-
-enum FilterParam {
-    ModFreq,
-    Width
-}
-
-trait Processor {
-    type Item;
-
-    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]);
-    fn get_param(&self, param: FilterParam) -> Self::Item;
-    fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String>;
-}
+use crate::utils::{Processor, FilterParam};
 
 struct Vibrato<T: Copy + Default> {
     sample_rate_hz: usize,

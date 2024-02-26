@@ -1,6 +1,19 @@
 use hound::WavWriter;
 use std::{io::BufWriter, fs::File};
 
+pub enum FilterParam {
+    ModFreq,
+    Width
+}
+
+pub trait Processor {
+    type Item;
+
+    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]);
+    fn get_param(&self, param: FilterParam) -> Self::Item;
+    fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String>;
+}
+
 pub struct ProcessBlocks {
     pub input_block: Vec<Vec<f32>>,
     pub output_block: Vec<Vec<f32>>
