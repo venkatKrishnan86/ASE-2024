@@ -2,6 +2,7 @@ use std::{fs::File, io::Write};
 
 mod ring_buffer;
 mod vibrato;
+mod utils;
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
