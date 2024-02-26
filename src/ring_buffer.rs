@@ -1,77 +1,111 @@
 pub struct RingBuffer<T> {
     buffer: Vec<T>,
-    head: usize,
-    tail: usize,
+    capacity: usize,
+    head: Option<usize>,
+    tail: Option<usize>,
 }
 
 impl<T: Copy + Default> RingBuffer<T> {
     pub fn new(capacity: usize) -> Self {
         RingBuffer {
             buffer: vec![T::default(); capacity],
-            head: 0,
-            tail: 0,
+            capacity: capacity,
+            head: None,
+            tail: None,
         }
     }
 
     pub fn reset(&mut self) {
         self.buffer.fill(T::default());
-        self.head = 0;
-        self.tail = 0;
+        self.head = None;
+        self.tail = None;
     }
 
     // `put` and `peek` write/read without advancing the indices.
     pub fn put(&mut self, value: T) {
-        self.buffer[self.head] = value
+        match self.head {
+            None => {
+                self.head = Some(0);
+                self.tail = Some(0);
+                self.buffer[0] = value;
+            },
+            Some(h) => self.buffer[h] = value
+        }
     }
 
     pub fn peek(&self) -> T {
-        self.buffer[self.tail]
+        match self.tail {
+            None => T::default(),
+            Some(t) => self.buffer[t]
+        }
     }
 
     pub fn get(&self, offset: usize) -> T {
-        self.buffer[(self.tail + offset) % self.capacity()]
+        match self.tail {
+            None => T::default(),
+            Some(t) => self.buffer[(t + offset) % self.capacity()]
+        }
     }
 
     // `push` and `pop` write/read and advance the indices.
     pub fn push(&mut self, value: T) {
-        self.buffer[self.head] = value;
-        self.head = (self.head + 1) % self.capacity();
+        match self.head {
+            None => {
+                self.head = Some(0);
+                self.tail = Some(0);
+                self.buffer[0] = value;
+            },
+            Some(h) => {
+                self.head = Some((h + 1) % self.capacity());
+                self.buffer[self.head.unwrap()] = value;
+            }
+        }
     }
 
-    pub fn pop(&mut self) -> T {
-        let value = self.buffer[self.tail];
-        self.tail = (self.tail + 1) % self.capacity();
-        value
+    pub fn pop(&mut self) -> Option<T> {
+        match self.tail {
+            None => None,
+            Some(t) => {
+                let value = self.buffer[t];
+                self.tail = Some((t + 1) % self.capacity());
+                Some(value)
+            }
+        }
     }
 
     pub fn get_read_index(&self) -> usize {
-        self.tail
+        self.tail.unwrap_or(0)
     }
 
     pub fn set_read_index(&mut self, index: usize) {
-        self.tail = index % self.capacity()
+        self.tail = Some(index % self.capacity())
     }
 
     pub fn get_write_index(&self) -> usize {
-        self.head
+        self.head.unwrap_or(0)
     }
 
     pub fn set_write_index(&mut self, index: usize) {
-        self.head = index % self.capacity()
+        self.head = Some(index % self.capacity())
     }
 
     pub fn len(&self) -> usize {
         // Return number of values currently in the ring buffer.
-        if self.head >= self.tail {
-            self.head - self.tail
-        } else {
-            self.head + self.capacity() - self.tail
+        match (self.head, self.tail) {
+            (Some(h), Some(t)) => {
+                if h >= t {
+                    h - t + 1
+                } else {
+                    h + self.capacity() - t + 1
+                }
+            },
+            (_, _) => 0
         }
     }
 
     pub fn capacity(&self) -> usize {
         // Return the size of the internal buffer.
-        self.buffer.len()
+        self.capacity
     }
 }
 
@@ -81,10 +115,10 @@ impl RingBuffer<f32> {
     pub fn get_frac(&self, offset: f32) -> f32 {
         assert!(offset>=0.0, "Offset must be greater than or equal to 0");
         if offset >= self.len() as f32 - 1.0 { return f32::default() }
-        match self.len() == 0 {
-            true => f32::default(),
-            false => (1.0-(offset - offset.trunc())) * self.buffer[(self.tail+offset.trunc() as usize)%self.capacity()] 
-                + (offset - offset.trunc()) * self.buffer[(self.tail+offset.trunc() as usize + 1)%self.capacity()]
+        match self.tail {
+            None => f32::default(),
+            Some(t) => (1.0-(offset - offset.trunc())) * self.buffer[(t+offset.trunc() as usize)%self.capacity()] 
+                + (offset - offset.trunc()) * self.buffer[(t+offset.trunc() as usize + 1)%self.capacity()]
         }
     }
 }
@@ -106,7 +140,7 @@ mod tests {
 
         for i in delay..capacity + 13 {
             assert_eq!(ring_buffer.len(), delay);
-            assert_eq!(ring_buffer.pop(), (i - delay) as f32);
+            assert_eq!(ring_buffer.pop(), Some((i - delay) as f32));
             ring_buffer.push(i as f32)
         }
     }
@@ -121,22 +155,22 @@ mod tests {
         ring_buffer.put(3);
         assert_eq!(ring_buffer.peek(), 3);
 
-        ring_buffer.set_write_index(1);
-        assert_eq!(ring_buffer.get_write_index(), 1);
+        ring_buffer.set_write_index(0);
+        assert_eq!(ring_buffer.get_write_index(), 0);
 
         ring_buffer.push(17);
-        assert_eq!(ring_buffer.get_write_index(), 2);
+        assert_eq!(ring_buffer.get_write_index(), 1);
 
         assert_eq!(ring_buffer.get_read_index(), 0);
         assert_eq!(ring_buffer.get(1), 17);
-        assert_eq!(ring_buffer.pop(), 3);
+        assert_eq!(ring_buffer.pop().unwrap(), 3);
         assert_eq!(ring_buffer.get_read_index(), 1);
 
         assert_eq!(ring_buffer.len(), 1);
         ring_buffer.push(42);
         assert_eq!(ring_buffer.len(), 2);
 
-        assert_eq!(ring_buffer.get_write_index(), 0);
+        assert_eq!(ring_buffer.get_write_index(), 2);
 
         // Should be unchanged.
         assert_eq!(ring_buffer.capacity(), capacity);
@@ -146,8 +180,19 @@ mod tests {
     fn test_capacity() {
         // Tricky: does `capacity` mean "size of internal buffer" or "number of elements before this is full"?
         let capacity = 3;
-        let mut ring_buffer = RingBuffer::new(3);
+        let mut ring_buffer = RingBuffer::new(capacity);
         for i in 0..(capacity - 1) {
+            ring_buffer.push(i);
+            dbg!(ring_buffer.len());
+            assert_eq!(ring_buffer.len(), i+1);
+        }
+    }
+
+    #[test]
+    fn test_len_function() {
+        let capacity = 10;
+        let mut ring_buffer = RingBuffer::new(capacity);
+        for i in 0..capacity {
             ring_buffer.push(i);
             dbg!(ring_buffer.len());
             assert_eq!(ring_buffer.len(), i+1);
@@ -243,81 +288,18 @@ mod tests {
             assert_eq!(0.0, buffer.get_frac(2.1));
         }
     }
-}
 
-// impl RingBuffer<f32> {
-//     // Return the value at at an offset from the current read index.
-//     // To handle fractional offsets, linearly interpolate between adjacent values. 
-//     pub fn get_frac(&self, offset: f32) -> Option<f32> {
-//         assert!(offset>=0.0, "Offset must be greater than or equal to 0");
-//         if offset >= self.len() as f32 - 1.0 { return None }
-//         match self.head {
-//             None => None,
-//             Some(t) => Some(
-//                 (1.0-(offset - offset.trunc())) * self.ring_buffer[(t+offset.trunc() as usize)%self.capacity] 
-//                 + (offset - offset.trunc()) * self.ring_buffer[(t+offset.trunc() as usize + 1)%self.capacity]
-//             )
-//         }
-//     }
-// }
+    mod push_tests {
+        use super::*;
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     mod push_tests {
-//         use super::*;
-
-//         #[test]
-//         fn test_1() {
-//             let mut buffer = RingBuffer::<i16>::new(3);
-//             for i in 1..5 {
-//                 buffer.push(i);
-//             }
+        #[test]
+        fn test_1() {
+            let mut buffer = RingBuffer::<i16>::new(3);
+            for i in 1..5 {
+                buffer.push(i);
+            }
             
-//             assert_eq!(vec![1,2,3], buffer.ring_buffer);
-//         }
-//     }
-
-//     mod get_frac_tests {
-//         use super::*;
-
-//         #[test]
-//         fn test_1() {
-//             let mut buffer = RingBuffer::<f32>::new(3);
-//             for i in 1..4 {
-//                 buffer.push(i as f32);
-//             }
-//             assert_eq!(1.5, buffer.get_frac(0.5).unwrap());
-//         }
-
-//         #[test]
-//         fn test_2() {
-//             let mut buffer = RingBuffer::<f32>::new(3);
-//             for i in 1..4 {
-//                 buffer.push(i as f32);
-//             }
-//             assert_eq!(2.8, buffer.get_frac(1.8).unwrap());
-//         }
-
-//         #[test]
-//         #[should_panic]
-//         fn test_3() {
-//             let mut buffer = RingBuffer::<f32>::new(3);
-//             for i in 1..4 {
-//                 buffer.push(i as f32);
-//             }
-//             let _ = buffer.get_frac(-0.2);
-//         }
-
-//         #[test]
-//         fn test_4() {
-//             let mut buffer = RingBuffer::<f32>::new(3);
-//             for i in 1..4 {
-//                 buffer.push(i as f32);
-//             }
-//             assert_eq!(None, buffer.get_frac(2.1));
-//         }
-//     }
-    
-// }
+            assert_eq!(vec![4,2,3], buffer.buffer);
+        } 
+    } 
+}

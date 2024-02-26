@@ -8,7 +8,7 @@ enum FilterParam {
 trait Processor {
     type Item;
 
-    fn process(&self);
+    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]);
     fn get_param(&self, param: FilterParam) -> Self::Item;
     fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String>;
 }
@@ -44,7 +44,7 @@ impl Processor for Vibrato<f32>
         }
     }
 
-    fn process(&self) {
+    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
         
     }
 
@@ -71,7 +71,7 @@ impl Processor for Vibrato<i16>
         }
     }
 
-    fn process(&self) {
+    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
         
     }
 
