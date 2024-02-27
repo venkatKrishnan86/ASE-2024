@@ -47,7 +47,31 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
-    // `push` and `pop` write/read and advance the indices.
+    /// Push a value into the RingBuffer.
+    ///
+    /// This will push the value and also advance the head index to the next position
+    ///
+    /// Note: If the Ring Buffer is full, it will begin to overwrite the starting indices!
+    ///
+    /// ## Arguments
+    ///
+    /// `value`: The value to be pushed
+    ///
+    /// ## Returns
+    ///
+    /// `()`
+    ///
+    /// ```
+    /// use crate::ring_buffer::RingBuffer;
+    ///
+    /// let mut rb = RingBuffer::<i16>::new(2);
+    /// rb.push(0);
+    /// rb.push(2);
+    /// assert_eq!(vec![0, 2], rb.buffer);
+    ///
+    /// rb.push(-3);
+    /// assert_eq!(vec![-3, 2], rb.buffer);
+    /// ```
     pub fn push(&mut self, value: T) {
         match self.head {
             None => {
@@ -62,6 +86,33 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
+    /// Pop the value from the RingBuffer.
+    ///
+    /// This will advance the tail index to the next position.
+    ///
+    /// ## Arguments
+    ///
+    /// No Arguments
+    ///
+    /// ## Returns
+    ///
+    /// `Option<T>`: Return the popped value wrapped in an `Option`. If the Ring Buffer is empty, it will return `None`
+    ///
+    /// ```
+    /// use crate::ring_buffer::RingBuffer;
+    ///
+    /// let mut rb = RingBuffer::<i16>::new(2);
+    /// rb.push(0);
+    /// rb.push(2);
+    /// assert_eq!(vec![0, 2], rb.buffer);
+    /// assert_eq!(2, rb.len());
+    /// assert_eq!(Some(2), rb.pop());
+    /// assert_eq!(1, rb.len());
+    /// assert_eq!(Some(0), rb.pop());
+    /// assert_eq!(0, rb.len());
+    /// assert_eq!(None, rb.pop());
+    /// assert_eq!(0, rb.len());
+    /// ```
     pub fn pop(&mut self) -> Option<T> {
         match self.tail {
             None => None,
@@ -85,10 +136,21 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.head.unwrap_or(0)
     }
 
+    
     pub fn set_write_index(&mut self, index: usize) {
         self.head = Some(index % self.capacity())
     }
 
+    /// Obtain the number of values used in the RingBuffer
+    ///
+    /// ```
+    /// use crate::ring_buffer::RingBuffer;
+    ///
+    /// let mut rb = RingBuffer::<f32>::new(5);
+    /// rb.push(0.0);
+    /// rb.push(2.12);
+    /// assert_eq!(2, rb.len());
+    /// ```
     pub fn len(&self) -> usize {
         // Return number of values currently in the ring buffer.
         match (self.head, self.tail) {
@@ -103,6 +165,16 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
+    /// Obtain the maximum capacity of the RingBuffer
+    ///
+    /// NOTE: It is NOT the same as len(), which returns the current number of elements used up in the RingBuffer
+    ///
+    /// ```
+    /// use crate::ring_buffer::RingBuffer;
+    ///
+    /// let rb = RingBuffer::<f32>::new(5);
+    /// assert_eq!(5, rb.capacity());
+    /// ```
     pub fn capacity(&self) -> usize {
         // Return the size of the internal buffer.
         self.capacity
