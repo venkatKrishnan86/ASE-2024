@@ -33,10 +33,10 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
-    pub fn peek(&self) -> T {
+    pub fn peek(&self) -> Option<T> {
         match self.tail {
-            None => T::default(),
-            Some(t) => self.buffer[t]
+            None => None,
+            Some(t) => Some(self.buffer[t])
         }
     }
 
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(ring_buffer.capacity(), capacity);
 
         ring_buffer.put(3);
-        assert_eq!(ring_buffer.peek(), 3);
+        assert_eq!(ring_buffer.peek(), Some(3));
 
         ring_buffer.set_write_index(0);
         assert_eq!(ring_buffer.get_write_index(), 0);
