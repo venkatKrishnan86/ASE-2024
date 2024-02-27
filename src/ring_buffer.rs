@@ -106,9 +106,9 @@ impl<T: Copy + Default> RingBuffer<T> {
     /// rb.push(2);
     /// assert_eq!(vec![0, 2], rb.buffer);
     /// assert_eq!(2, rb.len());
-    /// assert_eq!(Some(2), rb.pop());
-    /// assert_eq!(1, rb.len());
     /// assert_eq!(Some(0), rb.pop());
+    /// assert_eq!(1, rb.len());
+    /// assert_eq!(Some(2), rb.pop());
     /// assert_eq!(0, rb.len());
     /// assert_eq!(None, rb.pop());
     /// assert_eq!(0, rb.len());
@@ -118,7 +118,13 @@ impl<T: Copy + Default> RingBuffer<T> {
             None => None,
             Some(t) => {
                 let value = self.buffer[t];
-                self.tail = Some((t + 1) % self.capacity());
+                if self.head == self.tail {
+                    self.head = None;
+                    self.tail = None;
+                }
+                else {
+                    self.tail = Some((t + 1) % self.capacity());
+                }
                 Some(value)
             }
         }
@@ -318,6 +324,21 @@ mod tests {
         assert_eq!(ring_buffer.get_read_index(), 3);
 
         // NOTE: Negative indices are also weird, but we can't even pass them due to type checking!
+    }
+
+    mod pop_tests {
+        use super::*;
+
+        #[test]
+        fn test_1() {
+            let mut rb = RingBuffer::<i16>::new(2);
+            rb.push(0);
+            rb.push(2);
+            assert_eq!(vec![0, 2], rb.buffer);
+            assert_eq!(Some(0), rb.pop());
+            assert_eq!(Some(2), rb.pop());
+            assert_eq!(None, rb.pop());
+        }
     }
 
     mod get_frac_tests {
