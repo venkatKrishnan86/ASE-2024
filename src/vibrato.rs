@@ -58,8 +58,7 @@ impl Processor for Vibrato<f32>
     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
         for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             for (sample_index, (input_sample, output_sample)) in input_channel.iter().zip(output_channel.iter_mut()).enumerate() {
-                let m = self.mod_freq;
-                let modulator = (m * 2.0 * PI * (sample_index+1) as f32).sin();
+                let modulator = (self.mod_freq * 2.0 * PI * (sample_index+1) as f32).sin();
                 let tap = 1.0 + self.width as f32 + self.width as f32 * modulator;
                 self.delay_line[channel].pop();
                 self.delay_line[channel].push(*input_sample);
