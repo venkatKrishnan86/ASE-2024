@@ -24,14 +24,12 @@ where T: Copy + Default + Into<f32>
             mod_freq,
             width,
             num_channels,
-            delay_line: Vec::<RingBuffer<T>>::new()
+            delay_line: Vec::new()
         };
-        for i in 0..filter.num_channels{
+        for channel in 0..filter.num_channels{
             filter.delay_line.push(RingBuffer::new(len_samples));
-            filter.delay_line[i].reset();
-            for _ in 0..len_samples {
-                filter.delay_line[i].push(T::default());
-            }
+            filter.delay_line[channel].reset();
+            for _ in 0..len_samples { filter.delay_line[channel].push(T::default()); }
         }
         filter
     }
@@ -42,10 +40,10 @@ impl Processor for Vibrato<f32>
     type Item = f32;
 
     fn reset(&mut self) {
-        for i in 0..self.num_channels{
-            self.delay_line[i].reset();
+        for channel in 0..self.num_channels{
+            self.delay_line[channel].reset();
             for _ in 0..(2 + 3*self.width) {
-                self.delay_line[i].push(f32::default());
+                self.delay_line[channel].push(Self::Item::default());
             }
         }
     }
@@ -58,14 +56,14 @@ impl Processor for Vibrato<f32>
     }
 
     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
-        for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
+        for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             for (sample_index, (input_sample, output_sample)) in input_channel.iter().zip(output_channel.iter_mut()).enumerate() {
                 let m = self.mod_freq;
                 let modulator = (m * 2.0 * PI * (sample_index+1) as f32).sin();
                 let tap = 1.0 + self.width as f32 + self.width as f32 * modulator;
-                self.delay_line[i].pop();
-                self.delay_line[i].push(*input_sample);
-                *output_sample = self.delay_line[i].get_frac(tap);
+                self.delay_line[channel].pop();
+                self.delay_line[channel].push(*input_sample);
+                *output_sample = self.delay_line[channel].get_frac(tap);
             }
         }
     }
