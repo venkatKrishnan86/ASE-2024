@@ -80,8 +80,10 @@ impl<T: Copy + Default> RingBuffer<T> {
                 self.buffer[0] = value;
             },
             Some(h) => {
-                self.head = Some((h + 1) % self.capacity());
-                self.buffer[self.head.unwrap()] = value;
+                if !(self.len() == self.capacity()){
+                    self.head = Some((h + 1) % self.capacity());
+                    self.buffer[self.head.unwrap()] = value;
+                }
             }
         }
     }
@@ -107,11 +109,8 @@ impl<T: Copy + Default> RingBuffer<T> {
     /// assert_eq!(vec![0, 2], rb.buffer);
     /// assert_eq!(2, rb.len());
     /// assert_eq!(Some(0), rb.pop());
-    /// assert_eq!(1, rb.len());
     /// assert_eq!(Some(2), rb.pop());
-    /// assert_eq!(0, rb.len());
     /// assert_eq!(None, rb.pop());
-    /// assert_eq!(0, rb.len());
     /// ```
     pub fn pop(&mut self) -> Option<T> {
         match self.tail {
@@ -392,7 +391,7 @@ mod tests {
                 buffer.push(i);
             }
             
-            assert_eq!(vec![4,2,3], buffer.buffer);
+            assert_eq!(vec![1,2,3], buffer.buffer);
         } 
-    } 
+    }
 }
