@@ -1,7 +1,6 @@
-use std::f32::consts::PI;
-
 use crate::ring_buffer::RingBuffer;
 use crate::utils::{Processor, FilterParam};
+use crate::lfo::lfo;
 
 pub struct Vibrato
 {
@@ -61,7 +60,7 @@ impl Processor for Vibrato
         for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             // ISSUE: len_samples DO NOT match the N-2 criteria in the loop
             for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                let modulator = (self.mod_freq * 2.0 * PI * self.sample_index[channel] as f32).sin();
+                let modulator = lfo(self.mod_freq, self.sample_index[channel] as f32);
                 let offset = 1.0 + self.width as f32 + self.width as f32 * modulator;
                 let _ = self.delay_line[channel].pop();
                 self.delay_line[channel].push(*input_sample);

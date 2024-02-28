@@ -6,6 +6,7 @@ use utils::{Processor, ProcessBlocks};
 mod ring_buffer;
 mod vibrato;
 mod utils;
+mod lfo;
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
