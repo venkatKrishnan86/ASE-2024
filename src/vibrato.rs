@@ -1,25 +1,39 @@
+use std::f32::consts::PI;
+
 use crate::ring_buffer::RingBuffer;
 use crate::utils::{Processor, FilterParam};
 
-struct Vibrato<T: Copy + Default> {
-    sample_rate_hz: usize,
-    mod_freq: T,
-    width: T,
-    buffer_size: usize,
+pub struct Vibrato<T: Copy + Default + Into<f32>> {
+    sample_rate_hz: f32,
+    mod_freq: f32,
+    width: usize,
+    num_channels: usize,
     delay_line: Vec<RingBuffer<T>>
 }
 
 impl<T> Vibrato<T>
-where T: Copy + Default
+where T: Copy + Default + Into<f32>
 {
-    fn new(sample_rate_hz: usize, mod_freq: T, width: T, buffer_size: usize) -> Self {
-        Self {
+    pub fn new(sample_rate_hz: f32, mod_freq: f32, width: T, num_channels: usize) -> Self {
+        let delay = (width.into() * sample_rate_hz).round() as usize;
+        let width = (width.into() * sample_rate_hz).round() as usize;
+        let mod_freq: f32 = mod_freq / sample_rate_hz;
+        let len_samples = 2+delay+width*2;
+        let mut filter = Self {
             sample_rate_hz,
             mod_freq,
             width,
-            buffer_size,
-            delay_line: Vec::new()
+            num_channels,
+            delay_line: Vec::<RingBuffer<T>>::new()
+        };
+        for i in 0..filter.num_channels{
+            filter.delay_line.push(RingBuffer::new(len_samples));
+            filter.delay_line[i].reset();
+            for _ in 0..len_samples {
+                filter.delay_line[i].push(T::default());
+            }
         }
+        filter
     }
 }
 
@@ -27,15 +41,33 @@ impl Processor for Vibrato<f32>
 {
     type Item = f32;
 
+    fn reset(&mut self) {
+        for i in 0..self.num_channels{
+            self.delay_line[i].reset();
+            for _ in 0..(2 + 3*self.width) {
+                self.delay_line[i].push(f32::default());
+            }
+        }
+    }
+
     fn get_param(&self, param: FilterParam) -> Self::Item {
         match param {
-            FilterParam::ModFreq => self.mod_freq,
-            FilterParam::Width => self.width
+            FilterParam::ModFreq => self.mod_freq * self.sample_rate_hz,
+            FilterParam::Width => self.width as f32/self.sample_rate_hz
         }
     }
 
     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
-        
+        for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
+            for (sample_index, (input_sample, output_sample)) in input_channel.iter().zip(output_channel.iter_mut()).enumerate() {
+                let m = self.mod_freq;
+                let modulator = (m * 2.0 * PI * (sample_index+1) as f32).sin();
+                let tap = 1.0 + self.width as f32 + self.width as f32 * modulator;
+                self.delay_line[i].pop();
+                self.delay_line[i].push(*input_sample);
+                *output_sample = self.delay_line[i].get_frac(tap);
+            }
+        }
     }
 
     fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String> {
@@ -43,166 +75,40 @@ impl Processor for Vibrato<f32>
             return Err("Value must be positive!".to_owned())
         }
         match param {
-            FilterParam::ModFreq => self.mod_freq = value,
-            FilterParam::Width => self.width = value
+            FilterParam::ModFreq => self.mod_freq = value / self.sample_rate_hz,
+            FilterParam::Width => self.width = (value * self.sample_rate_hz).round() as usize
         }
         Ok(())
     }
 }
 
-impl Processor for Vibrato<i16> 
-{
-    type Item = i16;
+// impl Processor for Vibrato<i16> 
+// {
+//     type Item = i16;
 
-    fn get_param(&self, param: FilterParam) -> Self::Item {
-        match param {
-            FilterParam::ModFreq => self.mod_freq,
-            FilterParam::Width => self.width
-        }
-    }
-
-    fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
-        
-    }
-
-    fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String> {
-        if value <= 0 {
-            return Err("Value must be positive!".to_owned())
-        }
-        match param {
-            FilterParam::ModFreq => self.mod_freq = value,
-            FilterParam::Width => self.width = value
-        }
-        Ok(())
-    }
-}
-
-// pub struct CombFilter {
-//     // TODO: your code here
-//     filter_type: FilterType,
-//     delay: f32,
-//     delayed_signal_amp_factor: f32,
-//     sample_rate_hz: f32,
-//     num_channels: usize,
-//     delay_line: Vec<AllocRingBuffer<f32>>
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub enum FilterType {
-//     FIR,
-//     IIR,
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub enum FilterParam {
-//     Gain,
-//     Delay,
-// }
-
-// #[derive(Debug, Clone)]
-// pub enum Error {
-//     InvalidValue { param: FilterParam, value: f32 }
-// }
-
-// impl CombFilter {
-//     pub fn new(filter_type: FilterType, max_delay_secs: f32, sample_rate_hz: f32, num_channels: usize) -> Self {
-//         let mut filter = Self {
-//             filter_type: filter_type,
-//             delay: max_delay_secs,
-//             delayed_signal_amp_factor: 0.5,
-//             sample_rate_hz: sample_rate_hz,
-//             num_channels: num_channels,
-//             delay_line: Vec::new()
-//         };
-//         for _ in 0..filter.num_channels{
-//             filter.delay_line.push(AllocRingBuffer::with_capacity((max_delay_secs * sample_rate_hz) as usize));
-//         }
-//         filter.reset();
-//         filter
+//     fn reset(&mut self) {
+//         todo!("");
 //     }
 
-//     pub fn reset(&mut self) {
-//         for i in 0..self.num_channels{
-//             self.delay_line[i].clear();
-//             for _ in 0..(self.delay*self.sample_rate_hz) as usize {
-//                 self.delay_line[i].push(0.0);
-//             }
-//         }
-//     }
-
-//     pub fn process(&mut self, input: &[&[f32]], output: &mut [&mut [f32]]) {
-//         match self.filter_type {
-//             FilterType::FIR => {
-//                 for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
-//                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-//                         *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(&0.0);
-//                         self.delay_line[i].dequeue();
-//                         self.delay_line[i].push(*input_sample);
-//                     }
-//                 }
-//             },
-//             FilterType::IIR => {
-//                 for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
-//                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-//                         *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(&0.0);
-//                         self.delay_line[i].dequeue();
-//                         self.delay_line[i].push(*output_sample);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     pub fn set_param(&mut self, param: FilterParam, value: f32) -> Result<(), Error> {
+//     fn get_param(&self, param: FilterParam) -> Self::Item {
 //         match param {
-//             FilterParam::Gain => {
-//                 if value < 0.0 || value > 1.0 {
-//                     return Err(Error::InvalidValue { param: param, value: value });
-//                 }
-//                 self.delayed_signal_amp_factor = value
-//             },
-//             FilterParam::Delay => {
-//                 if value > self.delay_line.get(0).expect("Missing delay line").capacity() as f32/self.sample_rate_hz || value < 0.0 {
-//                     return Err(Error::InvalidValue { param: param, value: value });
-//                 }
-//                 self.delay = value;
-//                 self.reset();
-//             }
+//             FilterParam::ModFreq => self.mod_freq as i16,
+//             FilterParam::Width => self.width
+//         }
+//     }
+
+//     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
+        
+//     }
+
+//     fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String> {
+//         if value <= 0 {
+//             return Err("Value must be positive!".to_owned())
+//         }
+//         match param {
+//             FilterParam::ModFreq => self.mod_freq = value as f32,
+//             FilterParam::Width => self.width = value
 //         }
 //         Ok(())
-//     }
-
-//     pub fn get_param(&self, param: FilterParam) -> f32 {
-//         match param {
-//             FilterParam::Gain => self.delayed_signal_amp_factor,
-//             FilterParam::Delay => self.delay
-//         }
-//     }
-    
-//     // TODO: feel free to define other functions for your own use
-// }
-
-// // TODO: feel free to define other types (here or in other modules) for your own use
-// pub fn process_and_write_audio(
-//     reader: &mut WavReader<BufReader<File>>, 
-//     block_size: usize, 
-//     channels: usize, 
-//     output_file: &String, 
-//     spec: WavSpec, 
-//     filter_type: FilterType,
-//     gain: f32,
-//     max_delay_secs: f32
-// ){
-
-//     let mut comb_filter_1: CombFilter = CombFilter::new(filter_type, max_delay_secs, spec.sample_rate as f32, channels);
-//     comb_filter_1.set_param(FilterParam::Gain, gain).expect("Incorrect gain value");
-//     let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(output_file, spec).expect("Unable to create file");
-
-//     while let Ok(block) = reader.samples::<i16>().take(block_size*channels).collect::<Result<Vec<_>, _>>() {
-//         let mut process_block = utils::ProcessBlocks::new(&block, &channels);
-//         let (input_address, mut output_address) = process_block.create_and_write_addresses();
-//         comb_filter_1.process(&input_address, &mut output_address);
-//         process_block.write_output_samples(&mut writer).unwrap();
-//         if block.len() < block_size*channels as usize { break }
 //     }
 // }
