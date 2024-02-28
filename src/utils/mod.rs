@@ -9,6 +9,7 @@ pub enum FilterParam {
 pub trait Processor {
     type Item;
 
+    fn reset(&mut self);
     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]);
     fn get_param(&self, param: FilterParam) -> Self::Item;
     fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String>;
