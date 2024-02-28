@@ -1,35 +1,31 @@
 use crate::ring_buffer::RingBuffer;
 use crate::utils::{Processor, FilterParam};
-use crate::lfo::lfo;
+use crate::lfo;
 
 pub struct Vibrato
 {
     sample_rate_hz: f32,
-    mod_freq: f32,
     width: usize,
     num_channels: usize,
-    delay_line: Vec<RingBuffer<f32>>,
-    sample_index: Vec<usize>
+    lfo: Vec<lfo::LFO>,
+    delay_line: Vec<RingBuffer<f32>>
 }
 
 impl Vibrato
 {
     pub fn new(sample_rate_hz: f32, mod_freq: f32, width: f32, num_channels: usize) -> Self {
         let width = (width * sample_rate_hz).round() as usize;
-        let mod_freq: f32 = mod_freq / sample_rate_hz;
         let len_samples = 2+width*3;
         let mut filter = Self {
             sample_rate_hz,
-            mod_freq,
             width,
             num_channels,
-            delay_line: Vec::<RingBuffer<f32>>::new(),
-            sample_index: Vec::new()
+            lfo: vec![lfo::LFO::new(mod_freq, sample_rate_hz); num_channels],
+            delay_line: vec![RingBuffer::new(len_samples); num_channels]
         };
-        for channel in 0..filter.num_channels{
-            filter.delay_line.push(RingBuffer::new(len_samples));
-            for _ in 0..len_samples { filter.delay_line[channel].push(f32::default()); }
-            filter.sample_index.push(1);
+        for channel in filter.delay_line.iter_mut(){
+            channel.set_read_index(0);
+            channel.set_write_index(len_samples-1);
         }
         filter
     }
@@ -41,8 +37,8 @@ impl Processor for Vibrato
 
     fn reset(&mut self) {
         for channel in 0..self.num_channels{
-            self.sample_index[channel] = 1;
             self.delay_line[channel].reset();
+            self.lfo[channel].reset();
             for _ in 0..(2 + 3*self.width) {
                 self.delay_line[channel].push(Self::Item::default());
             }
@@ -51,7 +47,9 @@ impl Processor for Vibrato
 
     fn get_param(&self, param: FilterParam) -> Self::Item {
         match param {
-            FilterParam::ModFreq => self.mod_freq * self.sample_rate_hz,
+            FilterParam::ModFreq => {
+                (1.0/self.lfo[0].size() as f32) * self.sample_rate_hz
+            },
             FilterParam::Width => self.width as f32/self.sample_rate_hz
         }
     }
@@ -60,12 +58,11 @@ impl Processor for Vibrato
         for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             // ISSUE: len_samples DO NOT match the N-2 criteria in the loop
             for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                let modulator = lfo(self.mod_freq, self.sample_index[channel] as f32);
+                let modulator = self.lfo[channel].output_sample();
                 let offset = 1.0 + self.width as f32 + self.width as f32 * modulator;
                 let _ = self.delay_line[channel].pop();
                 self.delay_line[channel].push(*input_sample);
                 *output_sample = self.delay_line[channel].get_frac(offset);
-                self.sample_index[channel]+=1;
             }
         }
     }
@@ -75,9 +72,74 @@ impl Processor for Vibrato
             return Err("Value must be positive!".to_owned())
         }
         match param {
-            FilterParam::ModFreq => self.mod_freq = value / self.sample_rate_hz,
-            FilterParam::Width => self.width = (value * self.sample_rate_hz).round() as usize
+            FilterParam::ModFreq => {
+                for channel in 0..self.num_channels {
+                    self.lfo[channel].modify_mod_freq(value);
+                }
+            }
+            FilterParam::Width => {
+                self.width = (value * self.sample_rate_hz).round() as usize;
+                self.delay_line = vec![RingBuffer::new(2 + self.width*3); self.num_channels];
+            }
         }
+        self.reset();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::is_close; 
+
+    mod set_param_tests {
+        use super::*;
+
+        #[test]
+        fn test_1_mod_freq() {
+            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            let _ = vib.set_param(FilterParam::ModFreq, 12.0);
+            assert!(is_close(12.0, vib.get_param(FilterParam::ModFreq), 0.001), "Mod Frequency set_param for Vibrato is wrong!");
+        }
+
+        #[test]
+        fn test_2_mod_freq() {
+            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            let _ = vib.set_param(FilterParam::ModFreq, 12.0);
+            let value = f32::round(44100.0/12.0) as usize;
+            assert_eq!(value, vib.lfo[0].size());
+        }
+
+        #[test]
+        fn test_1_width() {
+            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            let _ = vib.set_param(FilterParam::Width, 12.0);
+            assert!(is_close(12.0, vib.get_param(FilterParam::Width), 0.001), "Mod Frequency set_param for Vibrato is wrong!");
+        }
+
+        #[test]
+        fn test_2_width() {
+            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            let _ = vib.set_param(FilterParam::Width, 12.0);
+            for channel in 0..vib.num_channels {
+                assert_eq!(2 + vib.width*3, vib.delay_line[channel].len());
+            }
+        }
+    }
+
+    mod get_param_tests {
+        use super::*;
+
+        #[test]
+        fn test_1_mod_freq() {
+            let vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            assert!(is_close(25.0, vib.get_param(FilterParam::ModFreq), 0.001), "Mod Frequency get_param for Vibrato is wrong!");
+        }
+
+        #[test]
+        fn test_1_width() {
+            let vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+            assert!(is_close(0.002, vib.get_param(FilterParam::Width), 0.001), "Width get_param for Vibrato is wrong!");
+        }
     }
 }
