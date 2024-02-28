@@ -18,8 +18,8 @@ fn main() {
 
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 {
-        eprintln!("Usage: {} <input wave filename> <output text filename>", args[0]);
+    if args.len() < 5 {
+        eprintln!("Usage: {} <input wave filename> <output text filename> <modulation freq (Hz)> <width (s)>", args[0]);
         return
     }
 
@@ -28,14 +28,16 @@ fn main() {
     let spec = reader.spec();
     let channels = spec.channels as usize;
     let output_file = &args[2];
+    let mod_freq = args[3].parse::<f32>().expect("Modulation Frequency input is wrong! Must be a floating point");
+    let width = args[4].parse::<f32>().expect("Width input is wrong! Must be a floating point");
     if spec.bits_per_sample!=16 {
         eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", spec.bits_per_sample);
         return
     }
 
-    let block_size: usize = 1024;
+    let block_size: usize = 32;
 
-    let mut vibrato_filter = Vibrato::new(spec.sample_rate as f32, 5.0, 0.002, channels);
+    let mut vibrato_filter = Vibrato::new(spec.sample_rate as f32, mod_freq, width, channels);
     let mut writer: hound::WavWriter<BufWriter<File>> = hound::WavWriter::create(output_file, spec).expect("Unable to create file");
 
     while let Ok(block) = reader.samples::<i16>().take(block_size*channels).collect::<Result<Vec<_>, _>>() {
