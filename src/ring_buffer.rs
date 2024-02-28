@@ -51,7 +51,7 @@ impl<T: Copy + Default> RingBuffer<T> {
     ///
     /// This will push the value and also advance the head index to the next position
     ///
-    /// Note: If the Ring Buffer is full, it will begin to overwrite the starting indices!
+    /// Note: If the Ring Buffer is full, it will not do anything!
     ///
     /// ## Arguments
     ///
