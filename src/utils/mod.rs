@@ -1,5 +1,5 @@
 use hound::WavWriter;
-use std::{io::BufWriter, fs::File};
+use std::{fs::File, io::BufWriter};
 
 pub enum FilterParam {
     ModFreq,
@@ -62,8 +62,8 @@ impl ProcessBlocks {
     }
 }
 
-pub fn is_close(a: f32, b: f32) -> bool {
-    (a-b).abs() < f32::EPSILON
+pub fn is_close(a: f32, b: f32, rel_close: f32) -> bool {
+    (a-b).abs() < rel_close
 }
 
 pub fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
@@ -102,7 +102,7 @@ mod tests{
             assert_eq!(2, input_channel.len());
             assert_eq!(2, output_channel.len());
             for output_value in output_channel.iter() {
-                assert!(is_close(0.0, *output_value));
+                assert!(is_close(0.0, *output_value, f32::EPSILON));
             }
         }
         assert_eq!(3, counter);
@@ -112,27 +112,27 @@ mod tests{
     #[should_panic]
     fn test_is_close_function_and_max_sample() {
         let block = ProcessBlocks::new(&vec![i16::MAX], &1);
-        assert!(is_close(1.0, block.input_block[0][0]));
+        assert!(is_close(1.0, block.input_block[0][0], f32::EPSILON));
     }
 
     #[test]
     fn converting_samples_test_zero() {
         let block = ProcessBlocks::new(&vec![0], &1);
-        assert!(is_close(0.0, block.input_block[0][0]));
+        assert!(is_close(0.0, block.input_block[0][0], f32::EPSILON));
     }
 
     #[test]
     fn converting_samples_test_min() {
         let block = ProcessBlocks::new(&vec![i16::MIN, 0], &1);
-        assert!(is_close(-1.0, block.input_block[0][0]));
-        assert!(is_close(0.0, block.input_block[0][1]));
+        assert!(is_close(-1.0, block.input_block[0][0], f32::EPSILON));
+        assert!(is_close(0.0, block.input_block[0][1], f32::EPSILON));
     }
 
     #[test]
     fn converting_samples_test_max() {
         let block = ProcessBlocks::new(&vec![i16::MAX, 0], &1);
-        assert!(is_close(i16_to_f32(i16::MAX), block.input_block[0][0]));
-        assert!(is_close(0.0, block.input_block[0][1]));
+        assert!(is_close(i16_to_f32(i16::MAX), block.input_block[0][0], f32::EPSILON));
+        assert!(is_close(0.0, block.input_block[0][1], f32::EPSILON));
     }
 
     #[test]
