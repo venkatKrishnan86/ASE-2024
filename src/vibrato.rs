@@ -248,6 +248,7 @@ mod tests {
             }
         }
 
+        #[test]
         fn test_3_mono_blocking() {
             let block_size = 4;
             let channels = 1;
