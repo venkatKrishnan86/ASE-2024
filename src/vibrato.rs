@@ -2,6 +2,16 @@ use crate::ring_buffer::RingBuffer;
 use crate::utils::{Processor, FilterParam};
 use crate::lfo;
 
+/// # Vibrato Filter
+///
+/// This contains the -
+/// 1. Sample rate of the audio
+/// 2. Width parameter
+/// 3. Number of channels
+/// 3. The ModFreq parameter is used to create the LFO wavetable
+/// 4. Delay Line, as a vector of ring buffers, of size `num_channels`
+///
+/// It implements the trait `Processor`, and processes the audio using the `process` function
 pub struct Vibrato
 {
     sample_rate_hz: f32,
@@ -13,6 +23,17 @@ pub struct Vibrato
 
 impl Vibrato
 {
+    /// Constructor takes in the 
+    ///
+    /// ## Arguments
+    /// `sample_rate_hz: f32`: The sample rate of the audio in Hz
+    /// `mod_freq: f32` : The modulation frequency parameter value in Hz
+    /// `width: f32`:  The width parameter value in seconds
+    /// `num_channels: usize`: Number of channels
+    ///
+    /// ## Returns
+    ///
+    /// `Vibrato`: Creates the vibrato object 
     pub fn new(sample_rate_hz: f32, mod_freq: f32, width: f32, num_channels: usize) -> Self {
         let width = (width * sample_rate_hz).round() as usize;
         let len_samples = 2+width*3;
