@@ -93,36 +93,72 @@ mod tests {
     use crate::utils::is_close; 
 
     mod set_param_tests {
+        use std::fmt::format;
+
         use super::*;
 
+        /// This test is for checking if the setting `ModFreq` parameter changes the value to the requested value
+        ///
+        /// ## Returns
+        ///
+        /// Result<(), String> : This is to ensure the `test_2_mod_freq()` runs only if this test passes
         #[test]
-        fn test_1_mod_freq() {
+        fn test_1_mod_freq() -> Result<(), String>{
             let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
             let _ = vib.set_param(FilterParam::ModFreq, 12.0);
-            assert!(is_close(12.0, vib.get_param(FilterParam::ModFreq), 0.001), "Mod Frequency set_param for Vibrato is wrong!");
+            if !(is_close(12.0, vib.get_param(FilterParam::ModFreq), 0.001)) {
+                Err(String::from("Mod Frequency set_param for Vibrato is wrong!"))
+            }
+            else {
+                Ok(())
+            }
         }
 
+        /// This test is for checking whether the `sine_buffer` in `LFO` is *recreated* after modifying the `ModFreq` parameter 
+        ///
+        /// NOTE: Will only run if `test_1_mod_freq()` passes
         #[test]
         fn test_2_mod_freq() {
-            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
-            let _ = vib.set_param(FilterParam::ModFreq, 12.0);
-            let value = f32::round(44100.0/12.0) as usize;
-            assert_eq!(value, vib.lfo[0].size());
+            if let Ok(()) = test_1_mod_freq() {
+                let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+                let _ = vib.set_param(FilterParam::ModFreq, 12.0);
+                let value = f32::round(44100.0/12.0) as usize;
+                assert_eq!(value, vib.lfo[0].size());
+            }
+            else {
+                panic!("test_1_mod_freq() must pass first!")
+            }
         }
 
+        /// This test is for checking if the setting `Width` parameter changes the value to the requested value
+        ///
+        /// ## Returns
+        ///
+        /// Result<(), String> : This is to ensure the `test_2_width()` runs only if this test passes
         #[test]
-        fn test_1_width() {
+        fn test_1_width() -> Result<(), String> {
             let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
             let _ = vib.set_param(FilterParam::Width, 12.0);
-            assert!(is_close(12.0, vib.get_param(FilterParam::Width), 0.001), "Mod Frequency set_param for Vibrato is wrong!");
+            if !(is_close(12.0, vib.get_param(FilterParam::Width), 0.001)){
+                return Err(String::from("Mod Frequency set_param for Vibrato is wrong!"))
+            }
+            Ok(())
         }
 
+        /// This test is for checking whether the `delay_line` in `Vibrato` is *recreated* after modifying the `Width` parameter 
+        ///
+        /// NOTE: Will only run if `test_1_width()` passes
         #[test]
         fn test_2_width() {
-            let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
-            let _ = vib.set_param(FilterParam::Width, 12.0);
-            for channel in 0..vib.num_channels {
-                assert_eq!(2 + vib.width*3, vib.delay_line[channel].len());
+            if let Ok(()) = test_1_width() {
+                let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
+                let _ = vib.set_param(FilterParam::Width, 12.0);
+                for channel in 0..vib.num_channels {
+                    assert_eq!(2 + vib.width*3, vib.delay_line[channel].len());
+                }
+            }
+            else {
+                panic!("test_1_width() must pass first!")
             }
         }
     }
@@ -140,6 +176,15 @@ mod tests {
         fn test_1_width() {
             let vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
             assert!(is_close(0.002, vib.get_param(FilterParam::Width), 0.001), "Width get_param for Vibrato is wrong!");
+        }
+    }
+
+    mod process_tests {
+        use super::*;
+
+        #[test]
+        fn test_1() {
+            todo!("Take from comb filter")
         }
     }
 }
