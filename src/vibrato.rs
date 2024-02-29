@@ -5,13 +5,14 @@ use crate::lfo;
 /// # Vibrato Filter
 ///
 /// This contains the -
-/// 1. Sample rate of the audio
-/// 2. Width parameter
+/// 1. Sample rate of the audio (Hz)
+/// 2. Width parameter (seconds)
 /// 3. Number of channels
-/// 3. The ModFreq parameter is used to create the LFO wavetable
+/// 3. The ModFreq parameter (Hz) is used to create the LFO wavetable
 /// 4. Delay Line, as a vector of ring buffers, of size `num_channels`
 ///
 /// It implements the trait `Processor`, and processes the audio using the `process` function
+/// Choosing these units for sample rate, mod_freq, and width is purely based on the most common choices for these three (Hz, Hz and seconds)
 pub struct Vibrato
 {
     sample_rate_hz: f32,
