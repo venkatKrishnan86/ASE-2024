@@ -57,6 +57,10 @@ impl Processor for Vibrato
 {
     type Item = f32;
 
+    /// Resets the -
+    /// 1. Delay Line
+    /// 2. LFO wavetable
+    /// back to zeros, and restarts the sample indices
     fn reset(&mut self) {
         for channel in 0..self.num_channels{
             self.delay_line[channel].reset();
@@ -67,6 +71,15 @@ impl Processor for Vibrato
         }
     }
 
+    /// Get the value of the requested parameter
+    ///
+    /// ## Arguments
+    ///
+    /// `param: FilterParam`: An enum value describing which parameter needs to be obtained
+    ///
+    /// ## Returns
+    /// 
+    /// `Self::Item`: Returns the (f32) value of the filter parameter
     fn get_param(&self, param: FilterParam) -> Self::Item {
         match param {
             FilterParam::ModFreq => {
@@ -76,6 +89,14 @@ impl Processor for Vibrato
         }
     }
 
+    /// Process the audio in form of blocks
+    ///
+    /// ## Arguments
+    ///
+    /// `input: &[&[Self::Item]]`: Input reference of shape (number of channels, length of audio array)
+    /// `output: &mut[&mut[Self::Item]]`: Output reference of shape (number of channels, length of audio array)
+    ///
+    /// The output audio is updated post this function
     fn process(&mut self, input: &[&[Self::Item]], output: &mut[&mut[Self::Item]]) {
         for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             // ISSUE: len_samples DO NOT match the N-2 criteria in the loop
@@ -89,9 +110,19 @@ impl Processor for Vibrato
         }
     }
 
+    /// Sets the parameter value of user's choice
+    ///
+    /// ## Arguments
+    ///
+    /// `param: FilterParam`: An enum value describing which parameter needs to be modified
+    /// `value: Self::Item`: The value which will be updated (here, the `Self::Item` is `f32`)
+    ///
+    /// ## Returns
+    /// 
+    /// `Result<(), String>`: `Ok(())` if the value inputted is >= 0.0 else will return an error with an appropriate error message
     fn set_param(&mut self, param: FilterParam, value: Self::Item) -> Result<(), String> {
         if value <= 0.0 {
-            return Err("Value must be positive!".to_owned())
+            return Err(format!("Value inputted {value} must be positive!").to_owned())
         }
         match param {
             FilterParam::ModFreq => {
