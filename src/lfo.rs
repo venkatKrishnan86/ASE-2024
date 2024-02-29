@@ -49,10 +49,38 @@ impl LFO {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::is_close;
     use super::*;
 
+    /// This test is for the new() function
+    /// 
+    /// Asserts that the sine_buffer in the LFO is created properly
     #[test]
-    fn test_1() {
-        let lfo = LFO::new(5.0, 10.0);
+    fn test_1() -> Result<(), String> {
+        let lfo = LFO::new(5.0, 20.0);
+        let sine: Vec<f32> = vec![1.0, 0.0, -1.0, 0.0];
+        for (true_val, lfo_val) in sine.into_iter().zip(lfo.sine_buffer.into_iter()){
+            if !(is_close(true_val, lfo_val, 1e-5)){
+                return Err(format!("{true_val} doees not match the LFO value {lfo_val}").to_owned());
+            };
+        }
+        Ok(())
+    }
+
+    /// This test is for the output_sample() function
+    /// 
+    /// Asserts that the output_sample() must repeatedly return the values in the sine_buffer in a cyclic format without an end value
+    #[test]
+    fn test_2() {
+        if let Ok(()) = test_1() {
+            let mut lfo = LFO::new(5.0, 20.0);
+            let sine: Vec<f32> = vec![1.0, 0.0, -1.0, 0.0];
+            for index in 0..16 {
+                assert!(is_close(lfo.output_sample(), sine[index%4 as usize], 1e-5), "Sample does not match at {index}");
+            }
+        }
+        else {
+            panic!("test_1() must pass first!")
+        }
     }
 }
