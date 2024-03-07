@@ -35,16 +35,16 @@ impl ProcessBlocks {
         (input_immut_block, output_mut_block)
     }
 
-    pub fn write_output_samples(&mut self, writer: &mut WavWriter<BufWriter<File>>) -> Result<(), hound::Error> {
-        let new_output_block = transpose(self.output_block.clone());
+    // pub fn write_output_samples(&mut self, writer: &mut WavWriter<BufWriter<File>>) -> Result<(), hound::Error> {
+    //     let new_output_block = transpose(self.output_block.clone());
 
-        for output in new_output_block.into_iter() {
-            for value in output {
-                writer.write_sample(f32_to_i16(value))?;
-            }
-        }
-        Ok(())
-    }
+    //     for output in new_output_block.into_iter() {
+    //         for value in output {
+    //             writer.write_sample(f32_to_i16(value))?;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 }
 
 pub fn is_close(a: f32, b: f32) -> bool {

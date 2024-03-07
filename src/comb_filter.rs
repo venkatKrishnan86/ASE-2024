@@ -1,3 +1,4 @@
+use nih_plug::params::enums::Enum;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 pub struct CombFilter {
@@ -10,7 +11,7 @@ pub struct CombFilter {
     delay_line: Vec<AllocRingBuffer<f32>>
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Enum, PartialEq)]
 pub enum FilterType {
     FIR,
     IIR,

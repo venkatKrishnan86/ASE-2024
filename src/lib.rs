@@ -1,63 +1,89 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
+use comb_filter::FilterType;
+use ringbuffer::{AllocRingBuffer, RingBuffer};
+
+mod comb_filter;
+mod utils;
+
+const MIN_GAIN: f32 = 0.0;
+const MAX_GAIN: f32 = 1.0;
+const MIN_DELAY: i32 = 0;
+const MAX_DELAY: i32 = 1000;
 
 // This is a shortened version of the gain example with most comments removed, check out
 // https://github.com/robbert-vdh/nih-plug/blob/master/plugins/examples/gain/src/lib.rs to get
 // started
 
-struct AseExample {
-    params: Arc<AseExampleParams>,
+struct Comb {
+    params: Arc<CombParams>,
+    delay_line: Vec<AllocRingBuffer<f32>>
 }
 
 #[derive(Params)]
-struct AseExampleParams {
+struct CombParams {
     /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
     /// these IDs remain constant, you can rename and reorder these fields as you wish. The
     /// parameters are exposed to the host in the same order they were defined. In this case, this
     /// gain parameter is stored as linear gain while the values are displayed in decibels.
+    #[id = "delay"]
+    pub delay: IntParam,
     #[id = "gain"]
     pub gain: FloatParam,
+    #[id = "filter_type"]
+    pub filter_type: EnumParam<FilterType>,
 }
 
-impl Default for AseExample {
+impl Default for Comb {
     fn default() -> Self {
         Self {
-            params: Arc::new(AseExampleParams::default()),
+            params: Arc::new(CombParams::default()),
+            delay_line: Vec::new()
         }
     }
 }
 
-impl Default for AseExampleParams {
+impl Default for CombParams {
     fn default() -> Self {
         Self {
+            delay: IntParam::new(
+                "Delay", 
+                MAX_DELAY,
+                IntRange::Linear { 
+                    min: MIN_DELAY, 
+                    max: MAX_DELAY
+                }
+            )
+            .with_unit(" ms"),
             // This gain is stored as linear gain. NIH-plug comes with useful conversion functions
             // to treat these kinds of parameters as if we were dealing with decibels. Storing this
             // as decibels is easier to work with, but requires a conversion for every sample.
             gain: FloatParam::new(
                 "Gain",
-                util::db_to_gain(0.0),
-                FloatRange::Skewed {
-                    min: util::db_to_gain(-30.0),
-                    max: util::db_to_gain(30.0),
-                    // This makes the range appear as if it was linear when displaying the values as
-                    // decibels
-                    factor: FloatRange::gain_skew_factor(-30.0, 30.0),
+                MAX_GAIN/2.0,
+                FloatRange::Linear {
+                    min: MIN_GAIN,
+                    max: MAX_GAIN,
                 },
             )
             // Because the gain parameter is stored as linear gain instead of storing the value as
             // decibels, we need logarithmic smoothing
-            .with_smoother(SmoothingStyle::Logarithmic(50.0))
+            // .with_smoother(SmoothingStyle::Logarithmic(50.0))
             .with_unit(" dB")
             // There are many predefined formatters we can use here. If the gain was stored as
             // decibels instead of as a linear gain value, we could have also used the
             // `.with_step_size(0.1)` function to get internal rounding.
-            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
-            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            // .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            filter_type: EnumParam::new(
+                "Filter Type", 
+                FilterType::FIR
+            )
         }
     }
 }
 
-impl Plugin for AseExample {
+impl Plugin for Comb {
     const NAME: &'static str = "Comb Filter";
     const VENDOR: &'static str = "Venkatakrishnan V K";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
@@ -101,19 +127,34 @@ impl Plugin for AseExample {
 
     fn initialize(
         &mut self,
-        _audio_io_layout: &AudioIOLayout,
-        _buffer_config: &BufferConfig,
+        audio_io_layout: &AudioIOLayout,
+        buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
         // Resize buffers and perform other potentially expensive initialization operations here.
         // The `reset()` function is always called right after this function. You can remove this
         // function if you do not need it.
+        let sample_rate = buffer_config.sample_rate;
+        let channels = audio_io_layout.main_input_channels.unwrap().get();
+        for _ in 0..channels{
+            self.delay_line.push(AllocRingBuffer::with_capacity((MAX_DELAY as f32 * sample_rate / 1000.0) as usize));
+        }
+        self.reset();
         true
     }
 
     fn reset(&mut self) {
         // Reset buffers and envelopes here. This can be called from the audio thread and may not
         // allocate. You can remove this function if you do not need it.
+        let delay = self.params.delay.smoothed.next();
+        for i in 0..self.delay_line.len(){
+            self.delay_line[i].clear();
+            if delay>0 {
+                for _ in 0..(delay as f32 * self.delay_line[i].capacity() as f32 / 1000.0) as usize {
+                    self.delay_line[i].push(0.0);
+                }
+            }
+        }
     }
 
     fn process(
@@ -122,12 +163,29 @@ impl Plugin for AseExample {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_samples() { // single channel buffer samples
+        for (index, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
+            let filter = self.params.filter_type.modulated_plain_value();
+            let _delay = self.params.delay.smoothed.next();
 
-            for sample in channel_samples {
-                *sample *= gain; // Modifying the sample in-place
+            match filter {
+                FilterType::FIR => {
+                    for sample in channel_samples.iter_mut() {
+                        let value: Option<f32> = self.delay_line[index].dequeue();
+                        let input = *sample;
+                        self.delay_line[index].push(input);
+                        *sample = input + gain*value.unwrap_or(0.0);
+                    }
+                },
+                FilterType::IIR => {
+                    for sample in channel_samples.iter_mut() {
+                        let value: Option<f32> = self.delay_line[index].dequeue();
+                        let input = *sample;
+                        *sample = input + gain * value.unwrap_or(0.0);
+                        self.delay_line[index].push(*sample);
+                    }
+                }
             }
         }
 
@@ -135,7 +193,7 @@ impl Plugin for AseExample {
     }
 }
 
-impl ClapPlugin for AseExample {
+impl ClapPlugin for Comb {
     const CLAP_ID: &'static str = "edu.gatech.ase-example";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Simple example plugin for Audio Software Engineering.");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
@@ -145,7 +203,7 @@ impl ClapPlugin for AseExample {
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo];
 }
 
-impl Vst3Plugin for AseExample {
+impl Vst3Plugin for Comb {
     const VST3_CLASS_ID: [u8; 16] = *b"ASE-2024-Example";
 
     // And also don't forget to change these categories
@@ -153,5 +211,5 @@ impl Vst3Plugin for AseExample {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
-nih_export_clap!(AseExample);
-nih_export_vst3!(AseExample);
+nih_export_clap!(Comb);
+nih_export_vst3!(Comb);
