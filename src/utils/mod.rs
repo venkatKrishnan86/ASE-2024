@@ -1,4 +1,3 @@
-use hound::WavWriter;
 use std::{io::BufWriter, fs::File};
 
 pub struct ProcessBlocks {
