@@ -1,5 +1,7 @@
 use std::f32::consts::PI;
 
+// Premake the LFO sine, and use mod frequency as a phase value to get_frac values
+
 #[derive(Clone)]
 pub struct LFO {
     sine_buffer: Vec<f32>,
