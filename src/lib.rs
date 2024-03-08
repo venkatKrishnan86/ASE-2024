@@ -49,7 +49,7 @@ impl Default for CombParams {
         Self {
             delay: IntParam::new(
                 "Delay", 
-                MAX_DELAY,
+                MAX_DELAY/5,
                 IntRange::Linear { 
                     min: MIN_DELAY, 
                     max: MAX_DELAY
