@@ -1,7 +1,8 @@
 use nih_plug::prelude::*;
+use rand::rngs::OsRng;
 use std::sync::Arc;
 use ring_buffer::RingBuffer;
-use lfo::LFO;
+use lfo::{Oscillator, LFO};
 
 mod ring_buffer;
 mod lfo;
@@ -34,6 +35,8 @@ struct VibratoParams {
     pub mod_freq: FloatParam,
     #[id = "width"]
     pub width: IntParam,
+    #[id = "lfo"]
+    pub lfo: EnumParam<Oscillator>,
 }
 
 impl Default for Vibrato {
@@ -70,7 +73,11 @@ impl Default for VibratoParams {
                 }
             )
             .with_unit(" ms")
-            .with_smoother(SmoothingStyle::Linear(1.0))
+            .with_smoother(SmoothingStyle::Linear(1.0)),
+            lfo: EnumParam::new(
+                "LFO Type",
+                Oscillator::Sine
+            )
         }
     }
 }
@@ -128,9 +135,10 @@ impl Plugin for Vibrato {
         // function if you do not need it.
         let sample_rate = buffer_config.sample_rate;
         let channels = audio_io_layout.main_input_channels.unwrap().get();
+        let lfo_type = self.params.lfo.default_plain_value();
         for _ in 0..channels{
             self.delay_line.push(RingBuffer::new(2 + MAX_WIDTH as usize * 3));
-            self.lfo.push(lfo::LFO::new(sample_rate as u32, sample_rate as usize * 2, lfo::Oscillator::Sine, DEFAULT_FREQ))
+            self.lfo.push(lfo::LFO::new(sample_rate as u32, sample_rate as usize * 2, lfo_type.clone(), DEFAULT_FREQ))
         }
         self.reset();
         true
@@ -154,12 +162,15 @@ impl Plugin for Vibrato {
         let capacity = 2 + MAX_WIDTH as usize * 3;
         for (channel, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
             // Smoothing is optionally built into the parameters themselves
-            let frequency = self.params.mod_freq.smoothed.next();
-            let _ = self.lfo[channel].set_frequency(frequency);
+            let lfo_type = self.params.lfo.modulated_plain_value();
+            self.lfo[channel].set_oscillator(lfo_type);
 
             let width = self.params.width.smoothed.next();
             let read_index = self.delay_line[channel].get_read_index();
             self.delay_line[channel].set_write_index((read_index + (1 + width as usize*3)) % capacity);
+
+            let frequency = self.params.mod_freq.smoothed.next();
+            let _ = self.lfo[channel].set_frequency(frequency);
             for sample in channel_samples.iter_mut() {
                 let modulator = self.lfo[channel].get_sample();
                 let offset = 1.0 + width as f32 + width as f32 * modulator;

@@ -1,12 +1,11 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, os};
+
+use nih_plug::params::enums::Enum;
 
 // Premake the LFO sine, and use mod frequency as a phase value to get_frac values
-#[derive(Clone)]
+#[derive(Clone, Enum, PartialEq)]
 pub enum Oscillator {
     Sine,
-    Square,
-    BidirectionalSquare,
-    Saw,
     Triangle
 }
 
@@ -22,50 +21,11 @@ pub struct LFO {
 
 impl LFO {
     pub fn new(sample_rate: u32, wave_table_size: usize, oscillator: Oscillator, frequency: f32) -> Self {
-        let mut wave_table: Vec<f32> = Vec::new();
-        match oscillator {
-            Oscillator::Sine => {
-                for i in 0..wave_table_size {
-                    wave_table.push((2.0 * PI * (i as f32)/(wave_table_size as f32)).sin());
-                }
-            },
-            Oscillator::Square => {
-                for i in 0..wave_table_size {
-                    if i < wave_table_size/2 {
-                        wave_table.push(0.99);
-                    } else {
-                        wave_table.push(0.0);
-                    }
-                }
-            },
-            Oscillator::BidirectionalSquare => {
-                for i in 0..wave_table_size {
-                    if i < wave_table_size/2 {
-                        wave_table.push(0.99);
-                    } else {
-                        wave_table.push(-0.99);
-                    }
-                }
-            },
-            Oscillator::Saw => {
-                for i in 1..=wave_table_size {
-                    wave_table.push(((wave_table_size as f32 - i as f32)/(wave_table_size as f32) * 2.0) - 1.0);
-                }
-            },
-            Oscillator::Triangle => {
-                for i in 0..wave_table_size/2 {
-                    wave_table.push(((i as f32/wave_table_size as f32)*4.0) - 1.0);
-                }
-                for i in wave_table_size/2..wave_table_size {
-                    wave_table.push((-(i as f32/wave_table_size as f32)*4.0) + 3.0);
-                }
-            }
-        }
         Self {
             sample_rate,
-            oscillator,
+            oscillator: oscillator.clone(),
             wave_table_size,
-            wave_table,
+            wave_table: LFO::create_wavetable(oscillator, wave_table_size),
             index: 0.0,
             index_increment: frequency * wave_table_size as f32 / sample_rate as f32
         }
@@ -81,6 +41,31 @@ impl LFO {
 
     pub fn get_frequency(&self) -> f32 {
         self.index_increment * self.sample_rate as f32 / self.wave_table_size as f32
+    }
+
+    pub fn set_oscillator(&mut self, oscillator: Oscillator) {
+        self.oscillator = oscillator.clone();
+        self.wave_table = LFO::create_wavetable(oscillator, self.wave_table_size)
+    }
+
+    fn create_wavetable(oscillator: Oscillator, wave_table_size: usize) -> Vec<f32>{
+        let mut wave_table: Vec<f32> = Vec::new();
+        match oscillator {
+            Oscillator::Sine => {
+                for i in 0..wave_table_size {
+                    wave_table.push((2.0 * PI * (i as f32)/(wave_table_size as f32)).sin());
+                }
+            },
+            Oscillator::Triangle => {
+                for i in 0..wave_table_size/2 {
+                    wave_table.push(((i as f32/wave_table_size as f32)*4.0) - 1.0);
+                }
+                for i in wave_table_size/2..wave_table_size {
+                    wave_table.push((-(i as f32/wave_table_size as f32)*4.0) + 3.0);
+                }
+            }
+        }
+        wave_table
     }
 
     pub fn get_sample(&mut self) -> f32 {
