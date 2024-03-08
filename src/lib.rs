@@ -1,8 +1,10 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 use ring_buffer::RingBuffer;
+use lfo::LFO;
 
 mod ring_buffer;
+mod lfo;
 
 #[derive(Enum, PartialEq)]
 pub enum FilterType {
@@ -10,85 +12,70 @@ pub enum FilterType {
     IIR,
 }
 
-const MIN_GAIN: f32 = 0.0;
-const MAX_GAIN: f32 = 1.0;
-const MIN_DELAY: i32 = 0;
-const MAX_DELAY: i32 = 100;
+const MIN_WIDTH: i32 = 1;
+const MAX_WIDTH: i32 = 1000;
+const DEFAULT_WIDTH: i32 = 1;
+const MIN_FREQ: f32 = 0.0;
+const MAX_FREQ: f32 = 100.0;
+const DEFAULT_FREQ: f32 = 1.0;
 
-// This is a shortened version of the gain example with most comments removed, check out
-// https://github.com/robbert-vdh/nih-plug/blob/master/plugins/examples/gain/src/lib.rs to get
-// started
-
-struct Comb {
-    params: Arc<CombParams>,
+struct Vibrato {
+    params: Arc<VibratoParams>,
+    lfo: Vec<LFO>,
     delay_line: Vec<RingBuffer<f32>>
 }
 
 #[derive(Params)]
-struct CombParams {
+struct VibratoParams {
     /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
     /// these IDs remain constant, you can rename and reorder these fields as you wish. The
-    /// parameters are exposed to the host in the same order they were defined. In this case, this
-    /// gain parameter is stored as linear gain while the values are displayed in decibels.
-    #[id = "delay"]
-    pub delay: IntParam,
-    #[id = "gain"]
-    pub gain: FloatParam,
-    #[id = "filter_type"]
-    pub filter_type: EnumParam<FilterType>,
+    /// parameters are exposed to the host in the same order they were defined.
+    #[id = "modfreq"]
+    pub mod_freq: FloatParam,
+    #[id = "width"]
+    pub width: IntParam,
 }
 
-impl Default for Comb {
+impl Default for Vibrato {
     fn default() -> Self {
         Self {
-            params: Arc::new(CombParams::default()),
+            params: Arc::new(VibratoParams::default()),
+            lfo: Vec::new(),
             delay_line: Vec::new()
         }
     }
 }
 
-impl Default for CombParams {
+impl Default for VibratoParams {
     fn default() -> Self {
         Self {
-            delay: IntParam::new(
-                "Delay", 
-                MAX_DELAY/5,
-                IntRange::Linear { 
-                    min: MIN_DELAY, 
-                    max: MAX_DELAY
+            mod_freq: FloatParam::new(
+                "Mod Frequency",
+                DEFAULT_FREQ,
+                FloatRange::Skewed { 
+                    min: MIN_FREQ, 
+                    max: MAX_FREQ, 
+                    factor: 0.01 
                 }
             )
-            .with_unit(" ms"),
-            // This gain is stored as linear gain. NIH-plug comes with useful conversion functions
-            // to treat these kinds of parameters as if we were dealing with decibels. Storing this
-            // as decibels is easier to work with, but requires a conversion for every sample.
-            gain: FloatParam::new(
-                "Gain",
-                MAX_GAIN/2.0,
-                FloatRange::Linear {
-                    min: MIN_GAIN,
-                    max: MAX_GAIN,
-                },
+            .with_smoother(SmoothingStyle::Logarithmic(5.0))
+            .with_value_to_string(formatters::v2s_f32_rounded(2))
+            .with_unit(" Hz"),
+            width: IntParam::new(
+                "Width",
+                DEFAULT_WIDTH,
+                IntRange::Linear { 
+                    min: MIN_WIDTH,
+                    max: MAX_WIDTH 
+                }
             )
-            // Because the gain parameter is stored as linear gain instead of storing the value as
-            // decibels, we need logarithmic smoothing
-            // .with_smoother(SmoothingStyle::Logarithmic(50.0))
-            .with_unit(" dB")
-            // There are many predefined formatters we can use here. If the gain was stored as
-            // decibels instead of as a linear gain value, we could have also used the
-            // `.with_step_size(0.1)` function to get internal rounding.
-            .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            // .with_string_to_value(formatters::s2v_f32_gain_to_db()),
-            filter_type: EnumParam::new(
-                "Filter Type", 
-                FilterType::IIR
-            )
+            .with_unit(" ms")
         }
     }
 }
 
-impl Plugin for Comb {
-    const NAME: &'static str = "Comb Filter";
+impl Plugin for Vibrato {
+    const NAME: &'static str = "Vibrato";
     const VENDOR: &'static str = "Venkatakrishnan V K";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "vkrishnan65@gatech.edu";
@@ -141,7 +128,8 @@ impl Plugin for Comb {
         let sample_rate = buffer_config.sample_rate;
         let channels = audio_io_layout.main_input_channels.unwrap().get();
         for _ in 0..channels{
-            self.delay_line.push(RingBuffer::new((MAX_DELAY as f32 * sample_rate / 1000.0) as usize));
+            self.delay_line.push(RingBuffer::new(2 + MAX_WIDTH as usize * 3));
+            self.lfo.push(lfo::LFO::new(sample_rate as u32, sample_rate as usize * 2, lfo::Oscillator::Sine, DEFAULT_FREQ))
         }
         self.reset();
         true
@@ -150,14 +138,9 @@ impl Plugin for Comb {
     fn reset(&mut self) {
         // Reset buffers and envelopes here. This can be called from the audio thread and may not
         // allocate. You can remove this function if you do not need it.
-        let delay = self.params.delay.smoothed.next();
-        for i in 0..self.delay_line.len(){
-            self.delay_line[i].reset();
-            if delay>0 {
-                for _ in 0..(delay as f32 * self.delay_line[i].capacity() as f32 / 1000.0) as usize {
-                    self.delay_line[i].push(0.0);
-                }
-            }
+        for channel in self.delay_line.iter_mut(){
+            channel.set_read_index(0);
+            channel.set_write_index(1 + MAX_WIDTH as usize * 3);
         }
     }
 
@@ -165,36 +148,19 @@ impl Plugin for Comb {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        context: &mut impl ProcessContext<Self>,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let sample_rate = context.transport().sample_rate;
-        let capacity = (MAX_DELAY as f32 * sample_rate / 1000.0) as usize;
-        for (index, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
+        for (channel, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
             // Smoothing is optionally built into the parameters themselves
-            let gain = self.params.gain.smoothed.next();
-            let filter = self.params.filter_type.modulated_plain_value();
-            let delay = self.params.delay.smoothed.next();
-            if delay > 0 {
-                let read_index = self.delay_line[index].get_read_index();
-                self.delay_line[index].set_write_index((read_index + (delay as f32 * sample_rate/1000.0) as usize - 1) % capacity);
-                match filter {
-                    FilterType::FIR => {
-                        for sample in channel_samples.iter_mut() {
-                            let value: Option<f32> = self.delay_line[index].pop();
-                            let input = *sample;
-                            self.delay_line[index].push(input);
-                            *sample = input + gain*value.unwrap_or(0.0);
-                        }
-                    },
-                    FilterType::IIR => {
-                        for sample in channel_samples.iter_mut() {
-                            let value: Option<f32> = self.delay_line[index].pop();
-                            let input = *sample;
-                            *sample = input + gain * value.unwrap_or(0.0);
-                            self.delay_line[index].push(*sample);
-                        }
-                    }
-                }
+            let width = self.params.width.smoothed.next();
+            let _frequency = self.params.mod_freq.smoothed.next();
+            // let _ = self.lfo[channel].set_frequency(frequency);
+            for sample in channel_samples.iter_mut() {
+                let modulator = self.lfo[channel].get_sample();
+                let offset = 1.0 + width as f32 + width as f32 * modulator;
+                let _ = self.delay_line[channel].pop();
+                self.delay_line[channel].push(*sample);
+                *sample = self.delay_line[channel].get_frac(offset);
             }
         }
 
@@ -202,9 +168,9 @@ impl Plugin for Comb {
     }
 }
 
-impl ClapPlugin for Comb {
+impl ClapPlugin for Vibrato {
     const CLAP_ID: &'static str = "edu.gatech.ase-example";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("Simple example plugin for Audio Software Engineering.");
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("A Vibrato Plugin.");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
 
@@ -212,13 +178,13 @@ impl ClapPlugin for Comb {
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo, ClapFeature::Mono, ClapFeature::Surround, ClapFeature::Filter];
 }
 
-impl Vst3Plugin for Comb {
-    const VST3_CLASS_ID: [u8; 16] = *b"ASE-2024-Example";
+impl Vst3Plugin for Vibrato {
+    const VST3_CLASS_ID: [u8; 16] = *b"A Vibrato Plugin";
 
     // And also don't forget to change these categories
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
 }
 
-nih_export_clap!(Comb);
-nih_export_vst3!(Comb);
+nih_export_clap!(Vibrato);
+nih_export_vst3!(Vibrato);
