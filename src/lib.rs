@@ -14,10 +14,10 @@ pub enum FilterType {
 
 const MIN_WIDTH: i32 = 1;
 const MAX_WIDTH: i32 = 1000;
-const DEFAULT_WIDTH: i32 = 1;
+const DEFAULT_WIDTH: i32 = 50;
 const MIN_FREQ: f32 = 0.0;
 const MAX_FREQ: f32 = 100.0;
-const DEFAULT_FREQ: f32 = 1.0;
+const DEFAULT_FREQ: f32 = 5.0;
 
 struct Vibrato {
     params: Arc<VibratoParams>,
@@ -55,10 +55,10 @@ impl Default for VibratoParams {
                 FloatRange::Skewed { 
                     min: MIN_FREQ, 
                     max: MAX_FREQ, 
-                    factor: 0.01 
+                    factor: 0.15 
                 }
             )
-            .with_smoother(SmoothingStyle::Logarithmic(5.0))
+            .with_smoother(SmoothingStyle::Logarithmic(1.5))
             .with_value_to_string(formatters::v2s_f32_rounded(2))
             .with_unit(" Hz"),
             width: IntParam::new(
@@ -70,6 +70,7 @@ impl Default for VibratoParams {
                 }
             )
             .with_unit(" ms")
+            .with_smoother(SmoothingStyle::Linear(1.0))
         }
     }
 }
@@ -150,11 +151,15 @@ impl Plugin for Vibrato {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        let capacity = 2 + MAX_WIDTH as usize * 3;
         for (channel, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
             // Smoothing is optionally built into the parameters themselves
+            let frequency = self.params.mod_freq.smoothed.next();
+            let _ = self.lfo[channel].set_frequency(frequency);
+
             let width = self.params.width.smoothed.next();
-            let _frequency = self.params.mod_freq.smoothed.next();
-            // let _ = self.lfo[channel].set_frequency(frequency);
+            let read_index = self.delay_line[channel].get_read_index();
+            self.delay_line[channel].set_write_index((read_index + (1 + width as usize*3)) % capacity);
             for sample in channel_samples.iter_mut() {
                 let modulator = self.lfo[channel].get_sample();
                 let offset = 1.0 + width as f32 + width as f32 * modulator;
