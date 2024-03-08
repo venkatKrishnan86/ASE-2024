@@ -78,7 +78,7 @@ impl Default for CombParams {
             // .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             filter_type: EnumParam::new(
                 "Filter Type", 
-                FilterType::FIR
+                FilterType::IIR
             )
         }
     }
