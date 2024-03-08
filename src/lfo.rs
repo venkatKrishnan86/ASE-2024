@@ -1,88 +1,100 @@
 use std::f32::consts::PI;
 
 // Premake the LFO sine, and use mod frequency as a phase value to get_frac values
+#[derive(Clone)]
+pub enum Oscillator {
+    Sine,
+    Square,
+    BidirectionalSquare,
+    Saw,
+    Triangle
+}
 
 #[derive(Clone)]
 pub struct LFO {
-    sine_buffer: Vec<f32>,
-    sample_rate: f32,
-    curr_index: usize,
-    capacity: usize
+    sample_rate: u32,
+    oscillator: Oscillator,
+    wave_table_size: usize,
+    wave_table: Vec<f32>,
+    index: f32,
+    index_increment: f32
 }
 
 impl LFO {
-    pub fn new(mod_freq: f32, sample_rate: f32) -> Self {
-        let mod_freq = mod_freq/sample_rate;
-        let capacity = (1.0/mod_freq).round() as usize;
-        let mut sine_buffer = Vec::new();
-        for value in 1..=capacity {
-            sine_buffer.push((mod_freq * 2.0 * PI * value as f32).sin());
+    pub fn new(sample_rate: u32, wave_table_size: usize, oscillator: Oscillator, frequency: f32) -> Self {
+        let mut wave_table: Vec<f32> = Vec::new();
+        match oscillator {
+            Oscillator::Sine => {
+                for i in 0..wave_table_size {
+                    wave_table.push((2.0 * PI * (i as f32)/(wave_table_size as f32)).sin());
+                }
+            },
+            Oscillator::Square => {
+                for i in 0..wave_table_size {
+                    if i < wave_table_size/2 {
+                        wave_table.push(0.99);
+                    } else {
+                        wave_table.push(0.0);
+                    }
+                }
+            },
+            Oscillator::BidirectionalSquare => {
+                for i in 0..wave_table_size {
+                    if i < wave_table_size/2 {
+                        wave_table.push(0.99);
+                    } else {
+                        wave_table.push(-0.99);
+                    }
+                }
+            },
+            Oscillator::Saw => {
+                for i in 1..=wave_table_size {
+                    wave_table.push(((wave_table_size as f32 - i as f32)/(wave_table_size as f32) * 2.0) - 1.0);
+                }
+            },
+            Oscillator::Triangle => {
+                for i in 0..wave_table_size/2 {
+                    wave_table.push(((i as f32/wave_table_size as f32)*4.0) - 1.0);
+                }
+                for i in wave_table_size/2..wave_table_size {
+                    wave_table.push((-(i as f32/wave_table_size as f32)*4.0) + 3.0);
+                }
+            }
         }
         Self {
-            sine_buffer: sine_buffer,
-            sample_rate: sample_rate,
-            curr_index: 0,
-            capacity: capacity
+            sample_rate,
+            oscillator,
+            wave_table_size,
+            wave_table,
+            index: 0.0,
+            index_increment: frequency * wave_table_size as f32 / sample_rate as f32
         }
     }
 
-    pub fn modify_mod_freq(&mut self, new_mod_freq: f32) {
-        self.capacity = (self.sample_rate/new_mod_freq).round() as usize;
-        self.sine_buffer = Vec::new();
-        for value in 1..=self.capacity {
-            self.sine_buffer.push((new_mod_freq * 2.0 * PI * value as f32).sin());
+    pub fn set_frequency(&mut self, frequency: f32) -> Result<(), String> {
+        if frequency <= 0.0 {
+            return Err("Frequency must be a positive floating point value!".to_owned());
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.curr_index = 0;
-    }
-
-    pub fn output_sample(&mut self) -> f32 {
-        let temp = self.sine_buffer[self.curr_index];
-        self.curr_index = (self.curr_index+1)%self.capacity;
-        return temp;
-    }
-
-    pub fn size(&self) -> usize {
-        self.capacity
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::utils::is_close;
-    use super::*;
-
-    /// This test is for the new() function
-    /// 
-    /// Asserts that the sine_buffer in the LFO is created properly
-    #[test]
-    fn test_1() -> Result<(), String> {
-        let lfo = LFO::new(5.0, 20.0);
-        let sine: Vec<f32> = vec![1.0, 0.0, -1.0, 0.0];
-        for (true_val, lfo_val) in sine.into_iter().zip(lfo.sine_buffer.into_iter()){
-            if !(is_close(true_val, lfo_val, 1e-5)){
-                return Err(format!("{true_val} doees not match the LFO value {lfo_val}").to_owned());
-            };
-        }
+        self.index_increment = frequency * self.wave_table_size as f32 / self.sample_rate as f32;
         Ok(())
     }
 
-    /// This test is for the output_sample() function
-    /// 
-    /// Asserts that the output_sample() must repeatedly return the values in the sine_buffer in a cyclic format without an end value
-    #[test]
-    fn test_2() {
-        if let Ok(()) = test_1() {
-            let mut lfo = LFO::new(5.0, 20.0);
-            let sine: Vec<f32> = vec![1.0, 0.0, -1.0, 0.0];
-            for index in 0..16 {
-                assert!(is_close(lfo.output_sample(), sine[index%4 as usize], 1e-5), "Sample does not match at {index}");
-            }
-        }
-        else {
-            panic!("test_1() must pass first!")
-        }
+    pub fn get_frequency(&self) -> f32 {
+        self.index_increment * self.sample_rate as f32 / self.wave_table_size as f32
+    }
+
+    pub fn get_sample(&mut self) -> f32 {
+        let index_1 = self.index.trunc() as usize;
+        let frac = self.index - index_1 as f32;
+        self.index = (self.index + self.index_increment) % self.wave_table_size as f32;
+        LFO::lerp(self.wave_table[index_1], self.wave_table[(index_1 + 1)%self.wave_table_size], frac)
+    }
+
+    pub fn reset(&mut self) {
+        self.index = 0.0;
+    }
+
+    fn lerp(sample1: f32, sample2: f32, frac: f32) -> f32{
+        (1.0-frac)*sample1 + frac*sample2
     }
 }

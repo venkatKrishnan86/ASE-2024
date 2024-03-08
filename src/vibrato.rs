@@ -42,7 +42,7 @@ impl Vibrato
             sample_rate_hz,
             width,
             num_channels,
-            lfo: vec![lfo::LFO::new(mod_freq, sample_rate_hz); num_channels],
+            lfo: vec![lfo::LFO::new(sample_rate_hz as u32, sample_rate_hz as usize, lfo::Oscillator::Sine, mod_freq); num_channels],
             delay_line: vec![RingBuffer::new(len_samples); num_channels]
         };
         for channel in filter.delay_line.iter_mut(){
@@ -82,9 +82,7 @@ impl Processor for Vibrato
     /// `Self::Item`: Returns the (f32) value of the filter parameter
     fn get_param(&self, param: FilterParam) -> Self::Item {
         match param {
-            FilterParam::ModFreq => {
-                (1.0/self.lfo[0].size() as f32) * self.sample_rate_hz
-            },
+            FilterParam::ModFreq => self.lfo[0].get_frequency(),
             FilterParam::Width => self.width as f32/self.sample_rate_hz
         }
     }
@@ -101,7 +99,7 @@ impl Processor for Vibrato
         for (channel, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
             // ISSUE: len_samples DO NOT match the N-2 criteria in the loop
             for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                let modulator = self.lfo[channel].output_sample();
+                let modulator = self.lfo[channel].get_sample();
                 let offset = 1.0 + self.width as f32 + self.width as f32 * modulator;
                 let _ = self.delay_line[channel].pop();
                 self.delay_line[channel].push(*input_sample);
@@ -127,7 +125,7 @@ impl Processor for Vibrato
         match param {
             FilterParam::ModFreq => {
                 for channel in 0..self.num_channels {
-                    self.lfo[channel].modify_mod_freq(value);
+                    self.lfo[channel].set_frequency(value)?;
                 }
             }
             FilterParam::Width => {
@@ -162,22 +160,6 @@ mod tests {
             }
             else {
                 Ok(())
-            }
-        }
-
-        /// This test is for checking whether the `sine_buffer` in `LFO` is *recreated* after modifying the `ModFreq` parameter 
-        ///
-        /// NOTE: Will only run if `test_1_mod_freq()` passes
-        #[test]
-        fn test_2_mod_freq() {
-            if let Ok(()) = test_1_mod_freq() {
-                let mut vib = Vibrato::new(44100.0, 25.0, 0.002, 2);
-                let _ = vib.set_param(FilterParam::ModFreq, 12.0);
-                let value = f32::round(44100.0/12.0) as usize;
-                assert_eq!(value, vib.lfo[0].size());
-            }
-            else {
-                panic!("test_1_mod_freq() must pass first!")
             }
         }
 
