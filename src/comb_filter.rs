@@ -1,5 +1,5 @@
 use nih_plug::params::enums::Enum;
-use ringbuffer::{AllocRingBuffer, RingBuffer};
+use crate::ring_buffer::RingBuffer;
 
 pub struct CombFilter {
     // TODO: your code here
@@ -8,7 +8,7 @@ pub struct CombFilter {
     delayed_signal_amp_factor: f32,
     sample_rate_hz: f32,
     num_channels: usize,
-    delay_line: Vec<AllocRingBuffer<f32>>
+    delay_line: Vec<RingBuffer<f32>>
 }
 
 #[derive(Debug, Clone, Copy, Enum, PartialEq)]
@@ -39,7 +39,7 @@ impl CombFilter {
             delay_line: Vec::new()
         };
         for _ in 0..filter.num_channels{
-            filter.delay_line.push(AllocRingBuffer::with_capacity((max_delay_secs * sample_rate_hz) as usize));
+            filter.delay_line.push(RingBuffer::new((max_delay_secs * sample_rate_hz) as usize));
         }
         filter.reset();
         filter
@@ -47,7 +47,7 @@ impl CombFilter {
 
     pub fn reset(&mut self) {
         for i in 0..self.num_channels{
-            self.delay_line[i].clear();
+            self.delay_line[i].reset();
             for _ in 0..(self.delay*self.sample_rate_hz) as usize {
                 self.delay_line[i].push(0.0);
             }
@@ -59,8 +59,8 @@ impl CombFilter {
             FilterType::FIR => {
                 for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(&0.0);
-                        self.delay_line[i].dequeue();
+                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(0.0);
+                        self.delay_line[i].pop();
                         self.delay_line[i].push(*input_sample);
                     }
                 }
@@ -68,8 +68,8 @@ impl CombFilter {
             FilterType::IIR => {
                 for (i, (input_channel, output_channel)) in input.iter().zip(output.iter_mut()).enumerate() {
                     for (input_sample, output_sample) in input_channel.iter().zip(output_channel.iter_mut()) {
-                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(&0.0);
-                        self.delay_line[i].dequeue();
+                        *output_sample = *input_sample + self.delayed_signal_amp_factor * self.delay_line[i].peek().unwrap_or(0.0);
+                        self.delay_line[i].pop();
                         self.delay_line[i].push(*output_sample);
                     }
                 }

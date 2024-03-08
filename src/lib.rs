@@ -1,9 +1,10 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 use comb_filter::FilterType;
-use ringbuffer::{AllocRingBuffer, RingBuffer};
+use ring_buffer::RingBuffer;
 
 mod comb_filter;
+mod ring_buffer;
 mod utils;
 
 const MIN_GAIN: f32 = 0.0;
@@ -17,7 +18,7 @@ const MAX_DELAY: i32 = 1000;
 
 struct Comb {
     params: Arc<CombParams>,
-    delay_line: Vec<AllocRingBuffer<f32>>
+    delay_line: Vec<RingBuffer<f32>>
 }
 
 #[derive(Params)]
@@ -137,7 +138,7 @@ impl Plugin for Comb {
         let sample_rate = buffer_config.sample_rate;
         let channels = audio_io_layout.main_input_channels.unwrap().get();
         for _ in 0..channels{
-            self.delay_line.push(AllocRingBuffer::with_capacity((MAX_DELAY as f32 * sample_rate / 1000.0) as usize));
+            self.delay_line.push(RingBuffer::new((MAX_DELAY as f32 * sample_rate / 1000.0) as usize));
         }
         self.reset();
         true
@@ -148,7 +149,7 @@ impl Plugin for Comb {
         // allocate. You can remove this function if you do not need it.
         let delay = self.params.delay.smoothed.next();
         for i in 0..self.delay_line.len(){
-            self.delay_line[i].clear();
+            self.delay_line[i].reset();
             if delay>0 {
                 for _ in 0..(delay as f32 * self.delay_line[i].capacity() as f32 / 1000.0) as usize {
                     self.delay_line[i].push(0.0);
@@ -172,7 +173,7 @@ impl Plugin for Comb {
             match filter {
                 FilterType::FIR => {
                     for sample in channel_samples.iter_mut() {
-                        let value: Option<f32> = self.delay_line[index].dequeue();
+                        let value: Option<f32> = self.delay_line[index].pop();
                         let input = *sample;
                         self.delay_line[index].push(input);
                         *sample = input + gain*value.unwrap_or(0.0);
@@ -180,7 +181,7 @@ impl Plugin for Comb {
                 },
                 FilterType::IIR => {
                     for sample in channel_samples.iter_mut() {
-                        let value: Option<f32> = self.delay_line[index].dequeue();
+                        let value: Option<f32> = self.delay_line[index].pop();
                         let input = *sample;
                         *sample = input + gain * value.unwrap_or(0.0);
                         self.delay_line[index].push(*sample);
