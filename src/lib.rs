@@ -10,7 +10,7 @@ mod utils;
 const MIN_GAIN: f32 = 0.0;
 const MAX_GAIN: f32 = 1.0;
 const MIN_DELAY: i32 = 0;
-const MAX_DELAY: i32 = 1000;
+const MAX_DELAY: i32 = 100;
 
 // This is a shortened version of the gain example with most comments removed, check out
 // https://github.com/robbert-vdh/nih-plug/blob/master/plugins/examples/gain/src/lib.rs to get
