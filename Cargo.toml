@@ -1,11 +1,11 @@
 [package]
-name = "ase_example"
+name = "vibrato-plugin"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ian Clester <ijc@gatech.edu>"]
+authors = ["Venkatakrishnan V K <vkrishnan65@gatech.edu>"]
 license = "GPL-3.0-or-later"
 homepage = "https://youtu.be/dQw4w9WgXcQ"
-description = "Simple example plugin for Audio Software Engineering."
+description = "Vibrato Plugin"
 
 [workspace]
 members = ["xtask"]

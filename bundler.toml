@@ -5,4 +5,4 @@
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
 
 [ase_example]
-name = "Comb Filter"
+name = "Vibrato"
