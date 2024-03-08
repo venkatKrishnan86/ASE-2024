@@ -1,11 +1,14 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
-use comb_filter::FilterType;
 use ring_buffer::RingBuffer;
 
-mod comb_filter;
 mod ring_buffer;
-mod utils;
+
+#[derive(Enum, PartialEq)]
+pub enum FilterType {
+    FIR,
+    IIR,
+}
 
 const MIN_GAIN: f32 = 0.0;
 const MAX_GAIN: f32 = 1.0;
