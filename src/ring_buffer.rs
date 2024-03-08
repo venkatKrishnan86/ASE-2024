@@ -142,7 +142,6 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.head.unwrap_or(0)
     }
 
-    
     pub fn set_write_index(&mut self, index: usize) {
         self.head = Some(index % self.capacity())
     }

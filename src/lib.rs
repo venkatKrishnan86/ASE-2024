@@ -162,29 +162,34 @@ impl Plugin for Comb {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        let sample_rate = context.transport().sample_rate;
+        let capacity = (MAX_DELAY as f32 * sample_rate / 1000.0) as usize;
         for (index, channel_samples) in buffer.as_slice().iter_mut().enumerate() { // single channel buffer samples
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
             let filter = self.params.filter_type.modulated_plain_value();
-            let _delay = self.params.delay.smoothed.next();
-
-            match filter {
-                FilterType::FIR => {
-                    for sample in channel_samples.iter_mut() {
-                        let value: Option<f32> = self.delay_line[index].pop();
-                        let input = *sample;
-                        self.delay_line[index].push(input);
-                        *sample = input + gain*value.unwrap_or(0.0);
-                    }
-                },
-                FilterType::IIR => {
-                    for sample in channel_samples.iter_mut() {
-                        let value: Option<f32> = self.delay_line[index].pop();
-                        let input = *sample;
-                        *sample = input + gain * value.unwrap_or(0.0);
-                        self.delay_line[index].push(*sample);
+            let delay = self.params.delay.smoothed.next();
+            if delay > 0 {
+                let read_index = self.delay_line[index].get_read_index();
+                self.delay_line[index].set_write_index((read_index + (delay as f32 * sample_rate/1000.0) as usize - 1) % capacity);
+                match filter {
+                    FilterType::FIR => {
+                        for sample in channel_samples.iter_mut() {
+                            let value: Option<f32> = self.delay_line[index].pop();
+                            let input = *sample;
+                            self.delay_line[index].push(input);
+                            *sample = input + gain*value.unwrap_or(0.0);
+                        }
+                    },
+                    FilterType::IIR => {
+                        for sample in channel_samples.iter_mut() {
+                            let value: Option<f32> = self.delay_line[index].pop();
+                            let input = *sample;
+                            *sample = input + gain * value.unwrap_or(0.0);
+                            self.delay_line[index].push(*sample);
+                        }
                     }
                 }
             }
