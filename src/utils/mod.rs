@@ -1,6 +1,7 @@
 use hound::WavWriter;
 use std::{fs::File, io::BufWriter};
 
+#[allow(dead_code)]
 pub enum FilterParam {
     ModFreq,
     Width
@@ -62,10 +63,6 @@ impl ProcessBlocks {
     }
 }
 
-pub fn is_close(a: f32, b: f32, rel_close: f32) -> bool {
-    (a-b).abs() < rel_close
-}
-
 pub fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
     assert!(!v.is_empty());
     let len = v[0].len();
@@ -87,6 +84,11 @@ pub fn f32_to_i16(value: f32) -> i16 {
 
 pub fn i16_to_f32(value: i16) -> f32 {
     value as f32 / (1 << 15) as f32
+}
+
+#[allow(dead_code)]
+pub fn is_close(a: f32, b: f32, rel_close: f32) -> bool {
+    (a-b).abs() < rel_close
 }
 
 #[cfg(test)]

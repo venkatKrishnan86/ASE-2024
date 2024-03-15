@@ -6,6 +6,7 @@ pub struct RingBuffer<T> {
     tail: Option<usize>,
 }
 
+#[allow(dead_code)]
 impl<T: Copy + Default> RingBuffer<T> {
     pub fn new(capacity: usize) -> Self {
         RingBuffer {

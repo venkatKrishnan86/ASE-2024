@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 
 // Premake the LFO sine, and use mod frequency as a phase value to get_frac values
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum Oscillator {
     Sine,
     Square,
@@ -10,6 +11,7 @@ pub enum Oscillator {
     Triangle
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct LFO {
     sample_rate: u32,
