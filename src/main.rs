@@ -19,7 +19,7 @@ fn main() {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 5 {
-        eprintln!("Usage: {} <input wave filename> <output text filename> <modulation freq (Hz)> <width (s)>", args[0]);
+        eprintln!("Usage: {} <input wave filename> <output wave filename> <modulation freq (Hz)> <width (s)>", args[0]);
         return
     }
 
