@@ -2,8 +2,8 @@
 
 ## Building
 
-After installing [Rust](https://rustup.rs/), you can compile Ase Example as follows:
+After installing [Rust](https://rustup.rs/), you can compile Vibrato as follows:
 
 ```shell
-cargo xtask bundle ase_example --release
+cargo xtask bundle vibrato-plugin --release
 ```
