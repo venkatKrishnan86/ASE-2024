@@ -25,8 +25,6 @@ fn main() {
     let spec = reader.spec();
     let channels = spec.channels as usize;
     let output_file = &args[2];
-    let mod_freq = args[3].parse::<f32>().expect("Modulation Frequency input is wrong! Must be a floating point");
-    let width = args[4].parse::<f32>().expect("Width input is wrong! Must be a floating point");
     if spec.bits_per_sample!=16 {
         eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", spec.bits_per_sample);
         return
