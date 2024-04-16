@@ -12,6 +12,7 @@ pub enum ConvolutionMode {
 
 impl<'a> FastConvolver<'a> {
     pub fn new(impulse_response: &'a[f32], mode: ConvolutionMode) -> Self {
+        // impulse_response
         Self {
             impulse_response: impulse_response,
             mode: mode,
@@ -41,7 +42,8 @@ impl<'a> FastConvolver<'a> {
     pub fn convolve(&mut self, input1: &[f32], input2: &[f32], output: &mut [f32]) {
         for (idx1, i1) in input1.iter().enumerate() {
             for (idx2, i2) in input2.iter().enumerate() {
-                output[idx1 + idx2] = i1*i2
+                // println!("{}, {}, {}", i1, i2, idx1+idx2);
+                output[idx1 + idx2] += i1*i2;
             }
         }
     }

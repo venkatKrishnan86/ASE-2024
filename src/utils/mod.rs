@@ -40,7 +40,7 @@ impl ProcessBlocks {
         }
     }
 
-    pub fn create_and_write_addresses(&mut self) -> (&[f32], &mut [f32]) {
+    pub fn get_addresses(&mut self) -> (&[f32], &mut [f32]) {
         (&self.input_block, &mut self.output_block)
     }
 

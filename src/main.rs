@@ -25,6 +25,7 @@ fn main() {
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let mut impulse_reader = hound::WavReader::open(&args[3]).unwrap();
     let spec = reader.spec();
+    let channels = spec.channels as usize;
     let output_file = &args[2];
     if spec.bits_per_sample!=16 {
         eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", spec.bits_per_sample);
@@ -40,8 +41,8 @@ fn main() {
     let mut audio = Vec::new();
 
     while let Ok(block) = impulse_reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>(){
-        for i in block.iter(){
-            if i%2 == 0{
+        for (idx, i) in block.iter().enumerate(){
+            if idx%impulse_reader.spec().channels as usize == 0{
                 continue;
             }
             impulse.push(utils::i16_to_f32(*i));
@@ -49,8 +50,8 @@ fn main() {
         if block.len() < block_size as usize { break }
     }
     while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>(){
-        for i in block.iter(){
-            if i%2 == 0{
+        for (idx, i) in block.iter().enumerate(){
+            if idx%channels == 0{
                 continue;
             }
             audio.push(*i);
@@ -65,10 +66,10 @@ fn main() {
     match mode {
         ConvolutionMode::TimeDomain => {
             let mut process_block = ProcessBlocks::new(&audio, &impulse);
-            let (input_address, output_address) = process_block.create_and_write_addresses();
-            dbg!(input_address);
+            let (input_address, output_address) = process_block.get_addresses();
+            // dbg!(input_address);
             convolver.process(input_address, output_address);
-            dbg!(output_address);
+            // dbg!(output_address);
             process_block.write_output_samples(&mut writer).unwrap();
         },
         ConvolutionMode::FrequencyDomain { block_size } => {
