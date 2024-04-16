@@ -1,6 +1,7 @@
-struct FastConvolver<'a> {
+pub struct FastConvolver<'a> {
     impulse_response: &'a[f32],
-    mode: ConvolutionMode
+    mode: ConvolutionMode,
+    remaining_sections: Vec<f32>
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -13,7 +14,8 @@ impl<'a> FastConvolver<'a> {
     pub fn new(impulse_response: &'a[f32], mode: ConvolutionMode) -> Self {
         Self {
             impulse_response: impulse_response,
-            mode: mode
+            mode: mode,
+            remaining_sections: Vec::new()
         }
     }
 
