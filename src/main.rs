@@ -40,8 +40,8 @@ fn main() {
     // let impulse_response = Vec::new();
     let mut impulse_reader = hound::WavReader::open(&args[3]).unwrap();
     let impulse_response: Vec<f32> = impulse_reader.samples::<i16>()
-    .map(|s| s.unwrap() as f32 / (std::i16::MAX as f32 + 1.0))
-    .collect();
+        .map(|s| i16_to_f32(s.unwrap()))
+        .collect();
     let mut convolver = FastConvolver::new(&impulse_response, ConvolutionMode::TimeDomain);
 
     // Set up WAV writer with the same specifications as the input
@@ -50,7 +50,7 @@ fn main() {
 
     // Read and process audio data
     let samples: Vec<f32> = reader.samples::<i16>()
-        .map(|s| s.unwrap() as f32 / (std::i16::MAX as f32 + 1.0))
+        .map(|s| i16_to_f32(s.unwrap()))
         .collect();
     println!("{} {}", impulse_response.len(), samples.len());
 
