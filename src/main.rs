@@ -1,11 +1,11 @@
-use std::{fs::File, io::BufWriter};
+use std::io::Write;
+
+use hound::WavWriter;
+
+use crate::fast_convolver::{ConvolutionMode, FastConvolver};
 
 mod ring_buffer;
 mod fast_convolver;
-mod utils;
-
-use utils::ProcessBlocks;
-use fast_convolver::{ConvolutionMode, FastConvolver};
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
@@ -13,75 +13,61 @@ fn show_info() {
 }
 
 fn main() {
-   show_info();
+    show_info();
 
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 4 {
-        eprintln!("Usage: {} <input wave filename> <output wave filename> <IR wave filename>", args[0]);
-        return
+    if args.len() < 3 {
+        eprintln!("Usage: {} <input wave filename> <output text filename>", args[0]);
+        return;
     }
 
+    // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
-    let mut impulse_reader = hound::WavReader::open(&args[3]).unwrap();
     let spec = reader.spec();
-    let channels = spec.channels as usize;
-    let output_file = &args[2];
-    if spec.bits_per_sample!=16 {
-        eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", spec.bits_per_sample);
-        return
-    }
-    if impulse_reader.spec().bits_per_sample!=16 {
-        eprintln!("Bit depth must be 16 bit! Bit depth of the current song: {}", impulse_reader.spec().bits_per_sample);
-        return
+
+    // Ensure the audio is mono
+    if spec.channels != 1 {
+        eprintln!("Only mono audio files are supported.");
+        return;
     }
 
-    let block_size: usize = 1024;
-    let mut impulse = Vec::new();
-    let mut audio = Vec::new();
+    // Prepare the convolver
+    let impulse_response = vec![0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1];
+    let mut convolver = FastConvolver::new(&impulse_response, ConvolutionMode::TimeDomain);
 
-    while let Ok(block) = impulse_reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>(){
-        for (idx, i) in block.iter().enumerate(){
-            if idx%impulse_reader.spec().channels as usize == 0{
-                continue;
-            }
-            impulse.push(utils::i16_to_f32(*i));
-        }
-        if block.len() < block_size as usize { break }
-    }
-    while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>(){
-        for (idx, i) in block.iter().enumerate(){
-            if idx%channels == 0{
-                continue;
-            }
-            audio.push(*i);
-        }
-        if block.len() < block_size as usize { break }
-    }
-    let mode = ConvolutionMode::TimeDomain;
+    // Set up WAV writer with the same specifications as the input
+    // let output_path = Path::new(&args[2]);
+    let mut writer = WavWriter::create(&args[2], spec).expect("Failed to create WAV writer");
 
-    let mut convolver = FastConvolver::new(&impulse, mode);
-    let mut writer: hound::WavWriter<BufWriter<File>> = hound::WavWriter::create(output_file, spec).expect("Unable to create file");
+    // Read and process audio data
+    let samples: Vec<f32> = reader.samples::<i16>()
+        .map(|s| s.unwrap() as f32 / (std::i16::MAX as f32 + 1.0))
+        .collect();
 
-    match mode {
-        ConvolutionMode::TimeDomain => {
-            let mut process_block = ProcessBlocks::new(&audio, &impulse);
-            let (input_address, output_address) = process_block.get_addresses();
-            // dbg!(input_address);
-            convolver.process(input_address, output_address);
-            // dbg!(output_address);
-            process_block.write_output_samples(&mut writer).unwrap();
-        },
-        ConvolutionMode::FrequencyDomain { block_size } => {
+    let mut output_samples = vec![0.0; samples.len()];
+    convolver.process(&samples, &mut output_samples);
 
-        }
+    // Convert processed samples back to i16 and write them to the WAV file
+    for &sample in output_samples.iter() {
+        let output_sample = (sample * (std::i16::MAX as f32 + 1.0)) as i16;
+        writer.write_sample(output_sample).expect("Failed to write sample");
     }
 
-    // while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
-    //     let mut process_block = ProcessBlocks::new(&block);
-    //     let (input_address, output_address) = process_block.create_and_write_addresses();
-    //     convolver.process(input_address, output_address);
-    //     process_block.write_output_samples(&mut writer).unwrap();
-    //     if block.len() < block_size*channels as usize { break }
-    // }
+    // Calculate the size needed for the output tail
+    let tail_size = convolver.get_output_tail_size();
+
+    // Create a buffer for the tail with the appropriate size
+    let mut reverb_tail = vec![0.0; tail_size];
+
+    // Perform the flush operation
+    convolver.flush(&mut reverb_tail);
+
+    // Convert flush samples back to i16 and write them to the WAV file
+    for &sample in reverb_tail.iter() {
+        let output_sample = (sample * (std::i16::MAX as f32 + 1.0)) as i16;
+        writer.write_sample(output_sample).expect("Failed to write tail sample");
+    }
+
+    writer.finalize().expect("Failed to finalize WAV file");
 }
