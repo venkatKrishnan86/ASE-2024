@@ -8,7 +8,7 @@ mod ring_buffer;
 mod fast_convolver;
 mod utils;
 
-use utils::i16_to_f32;
+use utils::{i16_to_f32, f32_to_i16};
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
@@ -59,7 +59,7 @@ fn main() {
 
     // Convert processed samples back to i16 and write them to the WAV file
     for &sample in output_samples.iter() {
-        let output_sample = (sample * (std::i16::MAX as f32 + 1.0)) as i16;
+        let output_sample = f32_to_i16(sample);
         writer.write_sample(output_sample).expect("Failed to write sample");
     }
 
@@ -74,7 +74,7 @@ fn main() {
 
     // Convert flush samples back to i16 and write them to the WAV file
     for &sample in reverb_tail.iter() {
-        let output_sample = (sample * (std::i16::MAX as f32 + 1.0)) as i16;
+        let output_sample = f32_to_i16(sample);
         writer.write_sample(output_sample).expect("Failed to write tail sample");
     }
 
