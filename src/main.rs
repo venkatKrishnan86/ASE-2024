@@ -6,6 +6,9 @@ use crate::fast_convolver::{ConvolutionMode, FastConvolver};
 
 mod ring_buffer;
 mod fast_convolver;
+mod utils;
+
+use utils::i16_to_f32;
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
@@ -33,7 +36,12 @@ fn main() {
     }
 
     // Prepare the convolver
-    let impulse_response = vec![0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1];
+    // let impulse_response = vec![0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1];
+    // let impulse_response = Vec::new();
+    let mut impulse_reader = hound::WavReader::open(&args[3]).unwrap();
+    let impulse_response: Vec<f32> = impulse_reader.samples::<i16>()
+    .map(|s| s.unwrap() as f32 / (std::i16::MAX as f32 + 1.0))
+    .collect();
     let mut convolver = FastConvolver::new(&impulse_response, ConvolutionMode::TimeDomain);
 
     // Set up WAV writer with the same specifications as the input
@@ -44,6 +52,7 @@ fn main() {
     let samples: Vec<f32> = reader.samples::<i16>()
         .map(|s| s.unwrap() as f32 / (std::i16::MAX as f32 + 1.0))
         .collect();
+    println!("{} {}", impulse_response.len(), samples.len());
 
     let mut output_samples = vec![0.0; samples.len()];
     convolver.process(&samples, &mut output_samples);
