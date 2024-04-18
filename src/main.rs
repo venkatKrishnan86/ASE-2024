@@ -1,4 +1,5 @@
 use hound::WavWriter;
+use rustfft::num_traits::abs;
 
 use crate::fast_convolver::{ConvolutionMode, FastConvolver};
 
@@ -6,7 +7,7 @@ mod ring_buffer;
 mod fast_convolver;
 mod utils;
 
-use utils::{i16_to_f32, f32_to_i16};
+use utils::{i16_to_f32, f32_to_i16, ProcessBlocks};
 
 fn show_info() {
     eprintln!("MUSI-6106 Assignment Executable");
@@ -26,7 +27,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 1024;
+    let block_size = 1024*256;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -48,34 +49,62 @@ fn main() {
     let mut writer = WavWriter::create(&args[2], spec).expect("Failed to create WAV writer");
 
     // Read and process audio data
-    let samples: Vec<f32> = reader.samples::<i16>()
-        .map(|s| i16_to_f32(s.unwrap()))
-        .collect();
-    println!("{} {}", impulse_response.len(), samples.len());
+    // let samples: Vec<f32> = reader.samples::<i16>()
+    //     .map(|s| i16_to_f32(s.unwrap()))
+    //     .collect();
+    // println!("{} {}", impulse_response.len(), samples.len());
 
-    let mut output_samples = vec![0.0; samples.len()];
-    convolver.process(&samples, &mut output_samples);
+    // let mut output_samples = vec![0.0; samples.len()];
+    // convolver.process(&samples, &mut output_samples);
+    let mut output_samples = Vec::new();
+    let mut max_sample_value = 0.0;
 
+    while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
+        let mut process_block = ProcessBlocks::new(&block);
+        let (input_address, mut output_address) = process_block.get_addresses();
+        convolver.process(&input_address, &mut output_address);
+        // process_block.write_output_samples(&mut writer).unwrap();
+        for sample in process_block.output_block.into_iter() {
+            output_samples.push(sample);
+            if max_sample_value <= abs(sample) {
+                max_sample_value = abs(sample);
+            }
+        }
+        if block.len() < block_size { 
+            let ir_len = convolver.get_output_tail_size();
+            let input = vec![0; ir_len];
+            let mut process_block = ProcessBlocks::new(&input);
+            let (_, mut output_address) = process_block.get_addresses();
+            convolver.flush(&mut output_address);
+            for sample in process_block.output_block.into_iter() {
+                output_samples.push(sample);
+                if max_sample_value <= abs(sample) {
+                    max_sample_value = abs(sample);
+                }
+            }
+            break;
+        }
+    }
     // Convert processed samples back to i16 and write them to the WAV file
     for &sample in output_samples.iter() {
-        let output_sample = f32_to_i16(sample);
+        let output_sample = f32_to_i16(sample/max_sample_value);
         writer.write_sample(output_sample).expect("Failed to write sample");
     }
 
-    // Calculate the size needed for the output tail
-    let tail_size = convolver.get_output_tail_size();
+    // // Calculate the size needed for the output tail
+    // let tail_size = convolver.get_output_tail_size();
 
-    // Create a buffer for the tail with the appropriate size
-    let mut reverb_tail = vec![0.0; tail_size];
+    // // Create a buffer for the tail with the appropriate size
+    // let mut reverb_tail = vec![0.0; tail_size];
 
-    // Perform the flush operation
-    convolver.flush(&mut reverb_tail);
+    // // Perform the flush operation
+    // convolver.flush(&mut reverb_tail);
 
-    // Convert flush samples back to i16 and write them to the WAV file
-    for &sample in reverb_tail.iter() {
-        let output_sample = f32_to_i16(sample);
-        writer.write_sample(output_sample).expect("Failed to write tail sample");
-    }
+    // // Convert flush samples back to i16 and write them to the WAV file
+    // for &sample in reverb_tail.iter() {
+    //     let output_sample = f32_to_i16(sample);
+    //     writer.write_sample(output_sample).expect("Failed to write tail sample");
+    // }
 
-    writer.finalize().expect("Failed to finalize WAV file");
+    // writer.finalize().expect("Failed to finalize WAV file");
 }

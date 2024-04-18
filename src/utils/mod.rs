@@ -22,12 +22,11 @@ pub struct ProcessBlocks {
 }
 
 impl ProcessBlocks {
-    pub fn new(audio: &[i16], impulse: &[f32]) -> Self {
+    pub fn new(audio: &[i16]) -> Self {
         let length = audio.len();
-        let impulse_len = impulse.len();
         let mut block = Self {
             input_block: vec![0.0; length],
-            output_block: vec![0.0; length+impulse_len-1]
+            output_block: vec![0.0; length]
         };
         block.convert_i16_samples_to_f32(audio);
         block

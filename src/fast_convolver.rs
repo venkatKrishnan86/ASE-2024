@@ -30,17 +30,20 @@ impl<'a> FastConvolver<'a> {
     }
 
     pub fn reset(&mut self) {
-        self.buffer.fill(0.0);
+        self.buffer = vec![0.0; self.block_size];
+    }
+
+    pub fn set_block_size(&mut self, block_size: usize){
+        let len_ir = self.impulse_response.len() - 1;
+        self.block_size = max(block_size, len_ir);
     }
 
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
         match self.mode {
             ConvolutionMode::TimeDomain => {
+                let input_len = input.len();
+                self.block_size = input_len;
                 for (idx1, &sample) in input.iter().enumerate() {
-                    // self.ring_buffer.push(sample);
-                    // output[i] = (0..self.impulse_response.len()).map(|j| {
-                    //     self.ring_buffer.get(j) * self.impulse_response[j]
-                    // }).sum();
                     for (idx2, &ir_sample) in self.impulse_response.iter().enumerate() {
                         if idx1+idx2 < self.block_size {
                             output[idx1 + idx2] += sample*ir_sample + self.buffer[idx1 + idx2];
@@ -50,7 +53,6 @@ impl<'a> FastConvolver<'a> {
                         }
                     }
                 }
-                self.input_length = input.len();
             }
             _ => unimplemented!(),
         }
