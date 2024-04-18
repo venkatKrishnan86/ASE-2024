@@ -103,20 +103,30 @@ mod tests {
     #[test]
     fn test_flush() {
         let mut rng = rand::thread_rng();
-        let impulse_response: Vec<f32> = (0..51).map(|_| rng.gen::<f32>()).collect();
-        println!("impulse_response : {:?}", impulse_response);
-        let mut input_signal = vec![0.0_f32; 10];
-        input_signal[2] = 1.0;
-        let mut output_signal = vec![0.0_f32; 10];
+        let mut impulse_response = vec![0.0; 50];
+        impulse_response[0] = 1.0;
+
+        let gain = rng.gen::<f32>();
+
+        impulse_response[10] = gain; // Will delay the whole input by 10 samples with a random gain
+        let input_signal: Vec<f32> = (0..10).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0_f32; 10];
         let mut convolver = FastConvolver::new(&impulse_response, ConvolutionMode::TimeDomain, 10);
         convolver.process(&input_signal, &mut output_signal);
-        let tail_size = convolver.get_output_tail_size();
-        let mut reverb_tail = vec![0.0_f32; tail_size];
+        for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
+            assert!((out_val - in_val).abs() < 1e-5);
+        }
+
+        // The reverb tail is checking if the delay is done correctly
+        let tail_len = convolver.get_output_tail_size();
+        let mut reverb_tail: Vec<f32> = vec![0.0_f32; tail_len];
         convolver.flush(&mut reverb_tail);
-        println!("Reverb Tail: {:?}", reverb_tail);
-        assert!((reverb_tail[0] - impulse_response[2]).abs() < 1e-5);
-        assert!((reverb_tail[1] - impulse_response[1]).abs() < 1e-5);
-        assert!((reverb_tail[2] - impulse_response[0]).abs() < 1e-5);
+        for i in 0..10{
+            assert!((reverb_tail[i] - input_signal[i]*gain).abs() < 1e-5);   // First 10 tail values must be the delayed input signal times the random gain
+        }
+        for i in 10..tail_len{
+            assert!(reverb_tail[i].abs() < 1e-5);                            // Rest of the values need to be 0.0
+        }
     }
 
     #[test]
