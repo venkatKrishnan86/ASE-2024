@@ -2,23 +2,25 @@
 pub struct RingBuffer<T> {
     buffer: Vec<T>,
     capacity: usize,
+    default: T,
     head: Option<usize>,
     tail: Option<usize>,
 }
 
 #[allow(dead_code)]
-impl<T: Copy + Default> RingBuffer<T> {
-    pub fn new(capacity: usize) -> Self {
+impl<T: Clone> RingBuffer<T> {
+    pub fn new(capacity: usize, fill_values: T) -> Self {
         RingBuffer {
-            buffer: vec![T::default(); capacity],
+            buffer: vec![fill_values.clone(); capacity],
             capacity: capacity,
+            default: fill_values,
             head: None,
             tail: None,
         }
     }
 
     pub fn reset(&mut self) {
-        self.buffer.fill(T::default());
+        self.buffer.fill(self.default.clone());
         self.head = None;
         self.tail = None;
     }
@@ -38,7 +40,7 @@ impl<T: Copy + Default> RingBuffer<T> {
     pub fn peek(&self) -> Option<T> {
         match self.tail {
             None => None,
-            Some(t) => Some(self.buffer[t])
+            Some(t) => Some(self.buffer[t].clone())
         }
     }
 
@@ -131,7 +133,7 @@ impl<T: Copy + Default> RingBuffer<T> {
         match self.tail {
             None => None,
             Some(t) => {
-                let value = self.buffer[t];
+                let value = self.buffer[t].clone();
                 if self.head == self.tail {
                     self.head = None;
                     self.tail = None;
@@ -224,7 +226,7 @@ mod tests {
         // Test that ring buffer is a ring (wraps after more than `length` elements have entered).
         let capacity = 17;
         let delay = 5;
-        let mut ring_buffer: RingBuffer<f32> = RingBuffer::new(capacity);
+        let mut ring_buffer: RingBuffer<f32> = RingBuffer::new(capacity, f32::default());
 
         for i in 0..delay {
             ring_buffer.push(i as f32);
@@ -241,7 +243,7 @@ mod tests {
     fn test_api() {
         // Basic test of all API functions.
         let capacity = 3;
-        let mut ring_buffer = RingBuffer::new(capacity);
+        let mut ring_buffer = RingBuffer::new(capacity, i32::default());
         assert_eq!(ring_buffer.capacity(), capacity);
 
         ring_buffer.put(3);
@@ -272,7 +274,7 @@ mod tests {
     fn test_capacity() {
         // Tricky: does `capacity` mean "size of internal buffer" or "number of elements before this is full"?
         let capacity = 3;
-        let mut ring_buffer = RingBuffer::new(capacity);
+        let mut ring_buffer = RingBuffer::new(capacity, usize::default());
         for i in 0..(capacity - 1) {
             ring_buffer.push(i);
             dbg!(ring_buffer.len());
@@ -283,7 +285,7 @@ mod tests {
     #[test]
     fn test_len_function() {
         let capacity = 10;
-        let mut ring_buffer = RingBuffer::new(capacity);
+        let mut ring_buffer = RingBuffer::new(capacity, usize::default());
         for i in 0..capacity {
             ring_buffer.push(i);
             dbg!(ring_buffer.len());
@@ -294,7 +296,7 @@ mod tests {
     #[test]
     fn test_reset() {
         // Test state after initialization and reset.
-        let mut ring_buffer = RingBuffer::new(512);
+        let mut ring_buffer = RingBuffer::new(512, f64::default());
 
         // Check initial state.
         assert_eq!(ring_buffer.get_read_index(), 0);
@@ -325,7 +327,7 @@ mod tests {
     #[test]
     fn test_weird_inputs() {
         let capacity = 5;
-        let mut ring_buffer = RingBuffer::<f32>::new(capacity);
+        let mut ring_buffer = RingBuffer::<f32>::new(capacity, f32::default());
 
         ring_buffer.set_write_index(capacity);
         assert_eq!(ring_buffer.get_write_index(), 0);
@@ -345,7 +347,7 @@ mod tests {
 
         #[test]
         fn test_1() {
-            let mut rb = RingBuffer::<i16>::new(2);
+            let mut rb = RingBuffer::<i16>::new(2, i16::default());
             rb.push(0);
             rb.push(2);
             assert_eq!(vec![0, 2], rb.buffer);
@@ -360,7 +362,7 @@ mod tests {
 
         #[test]
         fn test_1() {
-            let mut buffer = RingBuffer::<f32>::new(4);
+            let mut buffer = RingBuffer::<f32>::new(4, f32::default());
             for i in 1..4 {
                 buffer.push(i as f32);
             }
@@ -369,7 +371,7 @@ mod tests {
 
         #[test]
         fn test_2() {
-            let mut buffer = RingBuffer::<f32>::new(4);
+            let mut buffer = RingBuffer::<f32>::new(4, f32::default());
             for i in 1..4 {
                 buffer.push(i as f32);
             }
@@ -379,7 +381,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn test_3() {
-            let mut buffer = RingBuffer::<f32>::new(3);
+            let mut buffer = RingBuffer::<f32>::new(3, f32::default());
             for i in 1..4 {
                 buffer.push(i as f32);
             }
@@ -388,7 +390,7 @@ mod tests {
 
         #[test]
         fn test_4() {
-            let mut buffer = RingBuffer::<f32>::new(3);
+            let mut buffer = RingBuffer::<f32>::new(3, f32::default());
             for i in 1..4 {
                 buffer.push(i as f32);
             }
@@ -401,7 +403,7 @@ mod tests {
 
         #[test]
         fn test_1() {
-            let mut buffer = RingBuffer::<i16>::new(3);
+            let mut buffer = RingBuffer::<i16>::new(3, i16::default());
             for i in 1..5 {
                 buffer.push(i);
             }
