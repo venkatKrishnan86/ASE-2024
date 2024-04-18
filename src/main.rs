@@ -27,7 +27,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 1024*256;
+    let block_size = 1024*128;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -42,16 +42,22 @@ fn main() {
     let impulse_response: Vec<f32> = impulse_reader.samples::<i16>()
         .map(|s| i16_to_f32(s.unwrap()))
         .collect();
-    let mut convolver = FastConvolver::new(&impulse_response, ConvolutionMode::TimeDomain, block_size);
+    let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, block_size);
 
     // Set up WAV writer with the same specifications as the input
     // let output_path = Path::new(&args[2]);
     let mut writer = WavWriter::create(&args[2], spec).expect("Failed to create WAV writer");
 
     // Read and process audio data
-    // let samples: Vec<f32> = reader.samples::<i16>()
-    //     .map(|s| i16_to_f32(s.unwrap()))
-    //     .collect();
+    let mut samples: Vec<i16> = reader.samples::<i16>()
+        .map(|s| s.unwrap())
+        .collect();
+    let len_samples = samples.len();
+    if len_samples%block_size != 0 {
+        for _ in 0..(block_size - len_samples%block_size) {
+            samples.push(0);
+        }
+    }
     // println!("{} {}", impulse_response.len(), samples.len());
 
     // let mut output_samples = vec![0.0; samples.len()];
@@ -59,32 +65,31 @@ fn main() {
     let mut output_samples = Vec::new();
     let mut max_sample_value = 0.0;
 
-    while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
-        let mut process_block = ProcessBlocks::new(&block);
-        let (input_address, mut output_address) = process_block.get_addresses();
-        convolver.process(&input_address, &mut output_address);
-        // process_block.write_output_samples(&mut writer).unwrap();
-        for sample in process_block.output_block.into_iter() {
-            output_samples.push(sample);
-            if max_sample_value <= abs(sample) {
-                max_sample_value = abs(sample);
-            }
-        }
-        if block.len() < block_size { 
-            let ir_len = convolver.get_output_tail_size();
-            let input = vec![0; ir_len];
-            let mut process_block = ProcessBlocks::new(&input);
-            let (_, mut output_address) = process_block.get_addresses();
-            convolver.flush(&mut output_address);
-            for sample in process_block.output_block.into_iter() {
-                output_samples.push(sample);
-                if max_sample_value <= abs(sample) {
-                    max_sample_value = abs(sample);
-                }
-            }
-            break;
+    // while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
+    let mut process_block = ProcessBlocks::new(&samples);
+    let (input_address, mut output_address) = process_block.get_addresses();
+    convolver.process(&input_address, &mut output_address);
+    // process_block.write_output_samples(&mut writer).unwrap();
+    for sample in process_block.output_block.into_iter() {
+        output_samples.push(sample);
+        if max_sample_value <= abs(sample) {
+            max_sample_value = abs(sample);
         }
     }
+    // if block.len() < block_size { 
+    //     let ir_len = convolver.get_output_tail_size();
+    //     let input = vec![0; ir_len];
+    //     let mut process_block = ProcessBlocks::new(&input);
+    //     let (_, mut output_address) = process_block.get_addresses();
+    //     convolver.flush(&mut output_address);
+    //     for sample in process_block.output_block.into_iter() {
+    //         output_samples.push(sample);
+    //         if max_sample_value <= abs(sample) {
+    //             max_sample_value = abs(sample);
+    //         }
+    //     }
+    // }
+
     // Convert processed samples back to i16 and write them to the WAV file
     for &sample in output_samples.iter() {
         let output_sample = f32_to_i16(sample/max_sample_value);
