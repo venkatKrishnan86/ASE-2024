@@ -7,21 +7,21 @@ pub enum ConvolutionMode {
     FrequencyDomain,
 }
 
-pub struct FastConvolver {
-    impulse_response: Vec<f32>,
+pub struct FastConvolver<'a> {
+    impulse_response: &'a[f32],
     buffer: Vec<f32>,
     block_size: usize,
     mode: ConvolutionMode,
     input_length: usize,
 }
 
-impl FastConvolver {
-    pub fn new(impulse_response: &[f32], mode: ConvolutionMode, block_size: usize) -> Self {
+impl<'a> FastConvolver<'a> {
+    pub fn new(impulse_response: &'a[f32], mode: ConvolutionMode, block_size: usize) -> Self {
         let len_ir = impulse_response.len() - 1;
         let buffer_size = max(len_ir, block_size);    // buffer_size must be the remaining values length = (block_size + IR_len - 1) - block_size
 
-        FastConvolver {
-            impulse_response: impulse_response.to_vec(),
+        Self {
+            impulse_response: impulse_response,
             buffer: vec![0.0; buffer_size],
             block_size,
             mode,
