@@ -1,4 +1,3 @@
-use crate::ring_buffer::RingBuffer;
 use std::cmp::max;
 
 #[derive(Debug, Clone, Copy)]
@@ -11,8 +10,7 @@ pub struct FastConvolver<'a> {
     impulse_response: &'a[f32],
     buffer: Vec<f32>,
     block_size: usize,
-    mode: ConvolutionMode,
-    input_length: usize,
+    mode: ConvolutionMode
 }
 
 impl<'a> FastConvolver<'a> {
@@ -24,8 +22,7 @@ impl<'a> FastConvolver<'a> {
             impulse_response: impulse_response,
             buffer: vec![0.0; buffer_size],
             block_size,
-            mode,
-            input_length: 0,
+            mode
         }
     }
 
