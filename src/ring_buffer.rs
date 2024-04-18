@@ -42,10 +42,23 @@ impl<T: Copy + Default> RingBuffer<T> {
         }
     }
 
-    pub fn get(&self, offset: usize) -> T {
+    pub fn get(&self, offset: usize) -> Option<&T> {
+        if offset > self.len() {
+            return None
+        }
         match self.tail {
-            None => T::default(),
-            Some(t) => self.buffer[(t + offset) % self.capacity()]
+            None => None,
+            Some(t) => Some(&self.buffer[(t + offset) % self.capacity()])
+        }
+    }
+
+    pub fn get_mut(&mut self, offset: usize) -> Option<&mut T> {
+        if offset > self.len() {
+            return None
+        }
+        match self.tail {
+            None => None,
+            Some(t) => Some(&mut self.buffer[(t + offset) % self.capacity])
         }
     }
 
@@ -241,7 +254,7 @@ mod tests {
         assert_eq!(ring_buffer.get_write_index(), 1);
 
         assert_eq!(ring_buffer.get_read_index(), 0);
-        assert_eq!(ring_buffer.get(1), 17);
+        assert_eq!(ring_buffer.get(1), Some(&17));
         assert_eq!(ring_buffer.pop().unwrap(), 3);
         assert_eq!(ring_buffer.get_read_index(), 1);
 
@@ -287,14 +300,14 @@ mod tests {
         assert_eq!(ring_buffer.get_read_index(), 0);
         assert_eq!(ring_buffer.get_write_index(), 0);
         for i in 0..ring_buffer.capacity() {
-            assert_eq!(ring_buffer.get(i), 0.0);
+            assert_eq!(ring_buffer.get(i), None);
         }
 
         // Fill ring buffer, mess with indices.
         let fill = 123.456;
         for i in 0..ring_buffer.capacity() {
             ring_buffer.push(fill);
-            assert_eq!(ring_buffer.get(i), fill);
+            assert_eq!(ring_buffer.get(i), Some(&fill));
         }
 
         ring_buffer.set_write_index(17);
@@ -305,7 +318,7 @@ mod tests {
         assert_eq!(ring_buffer.get_read_index(), 0);
         assert_eq!(ring_buffer.get_write_index(), 0);
         for i in 0..ring_buffer.capacity() {
-            assert_eq!(ring_buffer.get(i), 0.0);
+            assert_eq!(ring_buffer.get(i), None);
         }
     }
 
