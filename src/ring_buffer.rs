@@ -4,8 +4,7 @@ pub struct RingBuffer<T> {
     capacity: usize,
     default: T,
     head: Option<usize>,
-    tail: Option<usize>,
-    iter_temp: usize
+    tail: Option<usize>
 }
 
 #[allow(dead_code)]
@@ -16,8 +15,7 @@ impl<T: Clone> RingBuffer<T> {
             capacity: capacity,
             default: fill_values,
             head: None,
-            tail: None,
-            iter_temp: 0
+            tail: None
         }
     }
 
@@ -215,19 +213,6 @@ impl RingBuffer<f32> {
             None => f32::default(),
             Some(t) => (1.0-(offset - offset.trunc())) * self.buffer[(t+offset.trunc() as usize)%self.capacity()] 
                 + (offset - offset.trunc()) * self.buffer[(t+offset.trunc() as usize + 1)%self.capacity()]
-        }
-    }
-}
-
-impl<T: Clone> Iterator for RingBuffer<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter_temp += 1;
-        let value = self.get(self.iter_temp-1);
-        match value {
-            None => None,
-            Some(val) => Some((*val).clone())
         }
     }
 }
