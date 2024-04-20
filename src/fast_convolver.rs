@@ -1,4 +1,4 @@
-use std::cmp::{max,min};
+use std::cmp::max;
 use crate::ring_buffer::RingBuffer;
 
 #[derive(Debug, Clone, Copy)]
@@ -30,7 +30,7 @@ impl FastConvolver {
         // To match the broken pieces  (4+1 = 5 as in DAFX example) we will use buffer_size+1
         Self {
             impulse_response: ir,
-            buffer: RingBuffer::new(buffer_size+1, RingBuffer::new(buffer_size*buffer_size, Vec::new())),
+            buffer: RingBuffer::new(buffer_size+1, RingBuffer::new(8, Vec::new())),
             buffer_size: buffer_size,
             block_size: max_block_size,
             mode
@@ -40,7 +40,7 @@ impl FastConvolver {
     pub fn reset(&mut self) {
         self.buffer.reset();
         for _ in 0..(self.buffer_size+1) {
-            let new_ring_buffer: RingBuffer<Vec<f32>> = RingBuffer::new(self.buffer_size*self.buffer_size, Vec::new());
+            let new_ring_buffer: RingBuffer<Vec<f32>> = RingBuffer::new(8, Vec::new());
             self.buffer.push(new_ring_buffer);
         }
     }
@@ -54,35 +54,35 @@ impl FastConvolver {
         self.reset();
         for (main_idx, (input_block, output_block)) in input.chunks(self.block_size).zip(output.chunks_mut(self.block_size)).enumerate() {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
-                println!("{main_idx}: {ir_idx} Iteration running");
-                for offset in 0..(self.buffer_size+1) {
-                    let new_ring_buffer = self.buffer.get_mut(offset).unwrap();
-                    if new_ring_buffer.len() == new_ring_buffer.capacity() {
-                        new_ring_buffer.pop();
-                    }
-                    new_ring_buffer.push(vec![0.0; self.block_size]);
-                }
+                println!("{main_idx}: {ir_idx} Iteration running ({})", self.buffer_size);
+
                 let output_loc = self.buffer.get_mut(ir_idx).unwrap();
+                if output_loc.len() == output_loc.capacity() {
+                    output_loc.pop();
+                }
+                output_loc.push(vec![0.0; self.block_size]);
                 let output_temp = output_loc.get_mut(output_loc.get_write_index()).unwrap();
                 let output_flush = match self.mode {
                     ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output_temp, self.block_size),
                     ConvolutionMode::FrequencyDomain => unimplemented!()
                 };
                 let output_loc = self.buffer.get_mut(ir_idx+1).unwrap();
-                let output_temp = output_loc.get_mut(output_loc.get_write_index()).unwrap();
-                *output_temp = output_flush;
+                output_loc.push(output_flush);
             }
             let curr_buffer = self.buffer.pop().unwrap();
-            for results in curr_buffer.into_iter() {
-                for idx in 0..results.len() {
-                    output_block[idx] += results[idx]
+            println!("{}", curr_buffer.len());
+            for offset in 0..curr_buffer.len() {
+                let result_value = curr_buffer.get(offset).unwrap();
+                for (idx, sample) in output_block.iter_mut().enumerate() {
+                    *sample += result_value[idx];
                 }
             }
-            self.buffer.push(RingBuffer::new(self.buffer_size*self.buffer_size, Vec::new()));
+            self.buffer.push(RingBuffer::new(8, Vec::new()));
         }   
     }
 
     fn time_convolve(input: &[f32], ir: &[f32], output: &mut [f32], block_size: usize) -> Vec<f32>{
+        println!("{}, {}, {}",input.len(), ir.len(), output.len());
         let mut output_flush = vec![0.0; block_size];
         for (idx1, &sample) in input.iter().enumerate() {
             for (idx2, &ir_sample) in ir.iter().enumerate() {
@@ -97,23 +97,22 @@ impl FastConvolver {
     }
 
     pub fn get_output_tail_size(&self) -> usize {
-        self.impulse_response.len() - 1
+        self.impulse_response.len()
     }
 
     pub fn flush(&mut self, output: &mut [f32]) {
-        let remaining_samples = self.get_output_tail_size();
-        for idx in 0..remaining_samples {
-            // output[idx] = self.buffer[idx];
+        let mut start_pointer = 0;
+        while self.buffer.len()>0 {
+            let curr_buffer = self.buffer.pop().unwrap();
+            println!("{}", curr_buffer.len());
+            for offset in 0..curr_buffer.len() {
+                let result_value = curr_buffer.get(offset).unwrap();
+                for idx in 0..self.block_size {
+                    output[start_pointer + idx] += result_value[idx]
+                }
+            }
+            start_pointer += self.block_size;
         }
-        // for i in 0..remaining_samples {
-        //     output[i] = (0..self.impulse_response.len()).map(|j| {
-        //         if i + j < self.input_length {
-        //             self.ring_buffer.get(i + j).unwrap() * self.impulse_response[j]
-        //         } else {
-        //             0.0
-        //         }
-        //     }).sum();
-        // }
     }
 }
 
@@ -165,6 +164,22 @@ mod tests {
         }
         for i in 10..tail_len{
             assert!(reverb_tail[i].abs() < 1e-5);                            // Rest of the values need to be 0.0
+        }
+    }
+
+    #[test]
+    fn test_trial() {
+        let block_size = 10;
+        let mut impulse_response = vec![0.0; 130];
+        impulse_response[0] = 1.0;
+        let mut rng = rand::thread_rng();
+        let input_signal: Vec<f32> = (0..block_size*4).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0; block_size*4];
+        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, block_size);
+        convolver.process(&input_signal, &mut output_signal);
+        for i in 0..block_size*2{
+            println!("{} {}", output_signal[i], input_signal[i]);
+            assert!((output_signal[i] - input_signal[i]).abs() < 1e-5);   // First 10 tail values must be the delayed input signal times the random gain
         }
     }
 
