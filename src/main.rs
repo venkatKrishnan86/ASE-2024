@@ -27,7 +27,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 1024*128;
+    let block_size = 20342;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -77,17 +77,15 @@ fn main() {
         }
     }
     // if block.len() < block_size { 
-    //     let ir_len = convolver.get_output_tail_size();
-    //     let input = vec![0; ir_len];
-    //     let mut process_block = ProcessBlocks::new(&input);
-    //     let (_, mut output_address) = process_block.get_addresses();
-    //     convolver.flush(&mut output_address);
-    //     for sample in process_block.output_block.into_iter() {
-    //         output_samples.push(sample);
-    //         if max_sample_value <= abs(sample) {
-    //             max_sample_value = abs(sample);
-    //         }
-    //     }
+    let ir_len = convolver.get_output_tail_size();
+    let mut output = vec![0.0; ir_len];
+    convolver.flush(&mut output);
+    for sample in output.into_iter() {
+        output_samples.push(sample);
+        if max_sample_value <= abs(sample) {
+            max_sample_value = abs(sample);
+        }
+    }
     // }
 
     // Convert processed samples back to i16 and write them to the WAV file
