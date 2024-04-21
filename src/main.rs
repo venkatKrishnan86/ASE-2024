@@ -4,7 +4,6 @@ use rustfft::num_traits::abs;
 use crate::fast_convolver::{ConvolutionMode, FastConvolver};
 use std::time::Instant;
 
-mod ring_buffer;
 mod fast_convolver;
 mod utils;
 

@@ -1,5 +1,4 @@
 use std::{cmp::max, thread, time::Duration};
-use crate::ring_buffer::RingBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvolutionMode {
