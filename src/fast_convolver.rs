@@ -1,4 +1,6 @@
-use std::{cmp::max, thread, time::Duration};
+use std::cmp::max;
+use rustfft::{FftPlanner, FftDirection, Fft, num_complex::Complex, algorithm::Radix4};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvolutionMode {
@@ -10,16 +12,22 @@ pub struct FastConvolver {
     buffer: Vec<f32>,
     impulse_response: Vec<f32>,
     block_size: usize,
-    mode: ConvolutionMode
+    mode: ConvolutionMode,
+    fft: Radix4<f32>,
+    ifft: Radix4<f32>
 }
 
 impl FastConvolver {
     pub fn new(impulse_response: Vec<f32>, mode: ConvolutionMode, max_block_size: usize) -> Self {
+        let fft = Radix4::new(max_block_size*2, FftDirection::Forward);
+        let ifft = Radix4::new(max_block_size*2, FftDirection::Inverse);
         Self {
-            buffer: vec![0.0; impulse_response.len()],
+            buffer: vec![0.0; (impulse_response.len()/max_block_size + 2)*max_block_size],
             impulse_response,
             block_size: max_block_size,
-            mode
+            mode,
+            fft,
+            ifft
         }
     }
 
@@ -37,9 +45,10 @@ impl FastConvolver {
         let output_len = output.len();
         for (main_idx, input_block) in input.chunks(self.block_size).enumerate() {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
+                // println!("{} {}",main_idx, ir_idx);
                 match self.mode {
                     ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output, &mut self.buffer, (main_idx+ir_idx) * self.block_size, output_len),
-                    ConvolutionMode::FrequencyDomain => unimplemented!()
+                    ConvolutionMode::FrequencyDomain => FastConvolver::frequency_convolve(input_block, ir_block, output, &mut self.buffer, (main_idx+ir_idx) * self.block_size, self.block_size, output_len, &self.fft, &self.ifft),
                 };
             }
         }   
@@ -65,8 +74,49 @@ impl FastConvolver {
         }
     }
 
+    fn frequency_convolve(
+        input: &[f32], 
+        ir: &[f32], 
+        output: &mut [f32], 
+        flush_buffer: &mut [f32],
+        start_idx: usize,
+        block_size: usize,
+        output_len: usize,
+        fft: &Radix4<f32>,
+        ifft: &Radix4<f32>
+    ){
+        let mut input_values: Vec<Complex<f32>> = input
+            .iter()
+            .map(|value| Complex{re: *value, im: 0.0f32})
+            .collect();
+        let mut ir_values: Vec<Complex<f32>> = ir
+            .iter()
+            .map(|value| Complex{re: *value, im: 0.0f32})
+            .collect();
+        for _ in 0..(block_size*2 - input.len()) {
+            input_values.push(Complex{re: 0.0f32, im: 0.0f32});
+        }
+        for _ in 0..(block_size*2 - ir.len()) {
+            ir_values.push(Complex{re: 0.0f32, im: 0.0f32});
+        }
+        fft.process(&mut input_values);
+        fft.process(&mut ir_values);
+        for (input, ir) in input_values.iter_mut().zip(ir_values.iter()) {
+            *input *= *ir
+        }
+        ifft.process(&mut input_values);
+        for (idx, input) in input_values.iter().enumerate() {
+            let index = start_idx + idx;
+            if index < output_len {
+                output[index] += input.re;
+            } else {
+                flush_buffer[index - output_len] += input.re;
+            }
+        }
+    }
+
     pub fn get_output_tail_size(&self) -> usize {
-        self.buffer.len()*self.block_size
+        (self.buffer.len()+1)*self.block_size
     }
 
     pub fn flush(&mut self, output: &mut Vec<f32>) {
@@ -109,9 +159,9 @@ mod tests {
         let mut output_signal: Vec<f32> = vec![0.0_f32; 10];
         let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, 10);
         convolver.process(&input_signal, &mut output_signal);
-        // for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
-        //     assert!((out_val - in_val).abs() < 1e-5);
-        // }
+        for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
+            assert!((out_val - in_val).abs() < 1e-5);
+        }
 
         // The reverb tail is checking if the delay is done correctly
         let tail_len = convolver.get_output_tail_size();
