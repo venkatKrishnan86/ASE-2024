@@ -8,27 +8,17 @@ pub enum ConvolutionMode {
 }
 
 pub struct FastConvolver {
-    impulse_response: Vec<f32>,
     buffer: Vec<f32>,
+    impulse_response: Vec<f32>,
     block_size: usize,
     mode: ConvolutionMode
 }
 
 impl FastConvolver {
     pub fn new(impulse_response: Vec<f32>, mode: ConvolutionMode, max_block_size: usize) -> Self {
-        let mut ir = impulse_response;
-        let len_ir = ir.len();
-        let pad_value = len_ir%max_block_size;
-        if pad_value != 0 {
-            for _ in 0..(max_block_size-pad_value) {
-                ir.push(0.0);
-            }
-        }
-
-        // To match the broken pieces  (4+1 = 5 as in DAFX example) we will use buffer_size+1
         Self {
-            impulse_response: ir,
-            buffer: vec![0.0; len_ir+max_block_size-pad_value],
+            buffer: vec![0.0; impulse_response.len()],
+            impulse_response,
             block_size: max_block_size,
             mode
         }
@@ -45,10 +35,11 @@ impl FastConvolver {
     }
 
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
+        let output_len = output.len();
         for (main_idx, input_block) in input.chunks(self.block_size).enumerate() {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
                 match self.mode {
-                    ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output, &mut self.buffer, main_idx+ir_idx, self.block_size, output.len()),
+                    ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output, &mut self.buffer, (main_idx+ir_idx) * self.block_size, output_len),
                     ConvolutionMode::FrequencyDomain => unimplemented!()
                 };
             }
@@ -60,17 +51,16 @@ impl FastConvolver {
         ir: &[f32], 
         output: &mut [f32], 
         flush_buffer: &mut [f32],
-        net_idx: usize, 
-        block_size: usize, 
+        start_idx: usize,
         output_len: usize
     ){
         for (idx1, &sample) in input.iter().enumerate() {
             for (idx2, &ir_sample) in ir.iter().enumerate() {
-                let index = net_idx*block_size + idx1 + idx2;
-                if index >= output_len {
-                    flush_buffer[index - output_len] += sample*ir_sample;
-                } else {
+                let index = start_idx + idx1 + idx2;
+                if index < output_len {
                     output[index] += sample*ir_sample;
+                } else {
+                    flush_buffer[index - output_len] += sample*ir_sample;
                 }
             }
         }
