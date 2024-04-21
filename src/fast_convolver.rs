@@ -89,7 +89,7 @@ impl FastConvolver {
                 if idx1+idx2 < block_size {
                     output[idx1 + idx2] += sample*ir_sample;
                 } else {
-                    output_flush[idx1 + idx2 - block_size] = sample*ir_sample;
+                    output_flush[idx1 + idx2 - block_size] += sample*ir_sample;
                 }
             }
         }
