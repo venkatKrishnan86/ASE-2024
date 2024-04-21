@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::{cmp::max, thread, time::Duration};
 use crate::ring_buffer::RingBuffer;
 
 #[derive(Debug, Clone, Copy)]
@@ -30,7 +30,7 @@ impl FastConvolver {
         // To match the broken pieces  (4+1 = 5 as in DAFX example) we will use buffer_size+1
         Self {
             impulse_response: ir,
-            buffer: RingBuffer::new(buffer_size+1, RingBuffer::new(8, Vec::new())),
+            buffer: RingBuffer::new(buffer_size+1, RingBuffer::new(buffer_size*buffer_size, Vec::new())),
             buffer_size: buffer_size,
             block_size: max_block_size,
             mode
@@ -55,7 +55,9 @@ impl FastConvolver {
                 println!("{main_idx}: {ir_idx} Iteration running ({})", self.buffer_size);
 
                 let output_loc = self.buffer.get_mut(ir_idx).unwrap();
-                if output_loc.len() == output_loc.capacity() {
+                if output_loc.is_full() {
+                    println!("Hrllo");
+
                     output_loc.pop();
                 }
                 output_loc.push(vec![0.0; self.block_size]);
@@ -65,22 +67,27 @@ impl FastConvolver {
                     ConvolutionMode::FrequencyDomain => unimplemented!()
                 };
                 let output_loc = self.buffer.get_mut(ir_idx+1).unwrap();
+                if output_loc.is_full() {
+                    println!("Hrllo");
+                    output_loc.pop();
+                }
                 output_loc.push(output_flush);
             }
             let curr_buffer = self.buffer.pop().unwrap();
-            println!("{}", curr_buffer.len());
+            // println!("{}", curr_buffer.len());
             for offset in 0..curr_buffer.len() {
                 let result_value = curr_buffer.get(offset).unwrap();
+                // println!("{:?}",result_value);
+                // thread::sleep(Duration::from_secs(10));
                 for (idx, sample) in output_block.iter_mut().enumerate() {
                     *sample += result_value[idx];
                 }
             }
-            self.buffer.push(RingBuffer::new(8, Vec::new()));
+            self.buffer.push(RingBuffer::new(self.buffer_size*self.buffer_size, Vec::new()));
         }   
     }
 
     fn time_convolve(input: &[f32], ir: &[f32], output: &mut [f32], block_size: usize) -> Vec<f32>{
-        println!("{}, {}, {}",input.len(), ir.len(), output.len());
         let mut output_flush = vec![0.0; block_size];
         for (idx1, &sample) in input.iter().enumerate() {
             for (idx2, &ir_sample) in ir.iter().enumerate() {
@@ -102,7 +109,6 @@ impl FastConvolver {
         let mut start_pointer = 0;
         while self.buffer.len()>0 {
             let curr_buffer = self.buffer.pop().unwrap();
-            println!("{}", curr_buffer.len());
             for offset in 0..curr_buffer.len() {
                 let result_value = curr_buffer.get(offset).unwrap();
                 for idx in 0..self.block_size {

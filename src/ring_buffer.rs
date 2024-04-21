@@ -201,6 +201,10 @@ impl<T: Clone> RingBuffer<T> {
         // Return the size of the internal buffer.
         self.capacity
     }
+
+    pub fn is_full(&self) -> bool {
+        self.len() == self.capacity
+    }
 }
 
 impl RingBuffer<f32> {
