@@ -9,8 +9,7 @@ pub enum ConvolutionMode {
 
 pub struct FastConvolver {
     impulse_response: Vec<f32>,
-    buffer: RingBuffer<Vec<f32>>,
-    buffer_size: usize,
+    buffer: Vec<f32>,
     block_size: usize,
     mode: ConvolutionMode
 }
@@ -25,79 +24,64 @@ impl FastConvolver {
                 ir.push(0.0);
             }
         }
-        let buffer_size = len_ir/max_block_size + 1;
 
         // To match the broken pieces  (4+1 = 5 as in DAFX example) we will use buffer_size+1
         Self {
             impulse_response: ir,
-            buffer: RingBuffer::new(buffer_size+1, vec![0.0; max_block_size]),
-            buffer_size: buffer_size,
+            buffer: vec![0.0; len_ir+max_block_size-pad_value],
             block_size: max_block_size,
             mode
         }
     }
 
-    pub fn reset(&mut self) {
-        self.buffer.reset();
-        self.buffer.set_read_index(0);
-        self.buffer.set_write_index(self.buffer_size);
+    pub fn _reset(&mut self) {
+        self.buffer.clear();
+        self.impulse_response.clear();
     }
 
-    pub fn set_block_size(&mut self, block_size: usize){
+    pub fn _set_block_size(&mut self, block_size: usize){
         let len_ir = self.impulse_response.len() - 1;
         self.block_size = max(block_size, len_ir);
     }
 
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
-        self.reset();
-        for (input_block, output_block) in input.chunks(self.block_size).zip(output.chunks_mut(self.block_size)) {
+        for (main_idx, input_block) in input.chunks(self.block_size).enumerate() {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
-                let output_temp = self.buffer.get_mut(ir_idx).unwrap();
-                let output_flush = match self.mode {
-                    ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output_temp, self.block_size),
+                match self.mode {
+                    ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output, &mut self.buffer, main_idx+ir_idx, self.block_size, output.len()),
                     ConvolutionMode::FrequencyDomain => unimplemented!()
                 };
-                let output_temp = self.buffer.get_mut(ir_idx+1).unwrap();
-                for (output_temp_value, flush_value) in output_temp.iter_mut().zip(output_flush.iter()){
-                    *output_temp_value+=flush_value
-                }
             }
-            let curr_buffer = self.buffer.pop().unwrap();
-            for (sample, output_sample) in curr_buffer.into_iter().zip(output_block.iter_mut()) {
-                *output_sample = sample;
-            }
-            self.buffer.push(vec![0.0; self.block_size]);
         }   
     }
 
-    fn time_convolve(input: &[f32], ir: &[f32], output: &mut [f32], block_size: usize) -> Vec<f32>{
-        let mut output_flush = vec![0.0; block_size];
+    fn time_convolve(
+        input: &[f32], 
+        ir: &[f32], 
+        output: &mut [f32], 
+        flush_buffer: &mut [f32],
+        net_idx: usize, 
+        block_size: usize, 
+        output_len: usize
+    ){
         for (idx1, &sample) in input.iter().enumerate() {
             for (idx2, &ir_sample) in ir.iter().enumerate() {
-                if idx1+idx2 < block_size {
-                    output[idx1 + idx2] += sample*ir_sample;
+                let index = net_idx*block_size + idx1 + idx2;
+                if index >= output_len {
+                    flush_buffer[index - output_len] += sample*ir_sample;
                 } else {
-                    output_flush[idx1 + idx2 - block_size] += sample*ir_sample;
+                    output[index] += sample*ir_sample;
                 }
             }
         }
-        return output_flush
     }
 
     pub fn get_output_tail_size(&self) -> usize {
         self.buffer.len()*self.block_size
     }
 
-    pub fn flush(&mut self, output: &mut [f32]) {
-        let mut start_pointer = 0;
-        while self.buffer.len()>0 {
-            let curr_buffer = self.buffer.pop().unwrap();
-            let block_size = curr_buffer.len();
-            for idx in 0..block_size {
-                output[start_pointer + idx] += curr_buffer[idx];
-            }
-            start_pointer += block_size;
-        }
+    pub fn flush(&mut self, output: &mut Vec<f32>) {
+        *output = self.buffer.clone();
     }
 }
 

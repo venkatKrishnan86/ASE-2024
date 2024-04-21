@@ -2,6 +2,7 @@ use hound::WavWriter;
 use rustfft::num_traits::abs;
 
 use crate::fast_convolver::{ConvolutionMode, FastConvolver};
+use std::time::Instant;
 
 mod ring_buffer;
 mod fast_convolver;
@@ -27,7 +28,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 1000;
+    let block_size = 512;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -59,31 +60,34 @@ fn main() {
         }
     }
     // println!("{} {}", impulse_response.len(), samples.len());
-
-    // let mut output_samples = vec![0.0; samples.len()];
     // convolver.process(&samples, &mut output_samples);
-    let mut output_samples = Vec::new();
+    // let mut output_samples = Vec::new();
     let mut max_sample_value = 0.0;
 
     // while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
     let mut process_block = ProcessBlocks::new(&samples);
     let (input_address, mut output_address) = process_block.get_addresses();
+
+    let now = Instant::now();
     convolver.process(&input_address, &mut output_address);
+    println!("Process Time: {}", now.elapsed().as_millis());
+
+    let mut output_samples = process_block.output_block;
     // process_block.write_output_samples(&mut writer).unwrap();
-    for sample in process_block.output_block.into_iter() {
-        output_samples.push(sample);
-        if max_sample_value <= abs(sample) {
-            max_sample_value = abs(sample);
-        }
-    }
     // if block.len() < block_size { 
     let ir_len = convolver.get_output_tail_size();
     let mut output = vec![0.0; ir_len];
+
+    let now = Instant::now();
     convolver.flush(&mut output);
+    println!("Flush Time: {}", now.elapsed().as_millis());
+    
     for sample in output.into_iter() {
         output_samples.push(sample);
-        if max_sample_value <= abs(sample) {
-            max_sample_value = abs(sample);
+    }
+    for sample in output_samples.iter() {
+        if max_sample_value <= abs(*sample) {
+            max_sample_value = abs(*sample);
         }
     }
     // }
