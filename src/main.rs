@@ -28,7 +28,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 512;
+    let block_size = 16;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -50,15 +50,9 @@ fn main() {
     let mut writer = WavWriter::create(&args[2], spec).expect("Failed to create WAV writer");
 
     // Read and process audio data
-    let mut samples: Vec<i16> = reader.samples::<i16>()
+    let samples: Vec<i16> = reader.samples::<i16>()
         .map(|s| s.unwrap())
         .collect();
-    let len_samples = samples.len();
-    if len_samples%block_size != 0 {
-        for _ in 0..(block_size - len_samples%block_size) {
-            samples.push(0);
-        }
-    }
     let mut max_sample_value = 0.0;
 
     // while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
