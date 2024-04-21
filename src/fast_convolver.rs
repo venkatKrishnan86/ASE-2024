@@ -39,10 +39,8 @@ impl FastConvolver {
 
     pub fn reset(&mut self) {
         self.buffer.reset();
-        for _ in 0..(self.buffer_size+1) {
-            let new_ring_buffer: RingBuffer<Vec<f32>> = RingBuffer::new(8, Vec::new());
-            self.buffer.push(new_ring_buffer);
-        }
+        self.buffer.set_read_index(0);
+        self.buffer.set_write_index(self.buffer_size);
     }
 
     pub fn set_block_size(&mut self, block_size: usize){
