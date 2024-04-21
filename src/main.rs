@@ -27,7 +27,7 @@ fn main() {
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 100;
+    let block_size = 1000;
 
     // Ensure the audio is mono
     if spec.channels != 1 {

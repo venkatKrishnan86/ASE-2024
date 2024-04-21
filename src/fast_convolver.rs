@@ -9,7 +9,7 @@ pub enum ConvolutionMode {
 
 pub struct FastConvolver {
     impulse_response: Vec<f32>,
-    buffer: RingBuffer<RingBuffer<Vec<f32>>>,
+    buffer: RingBuffer<Vec<f32>>,
     buffer_size: usize,
     block_size: usize,
     mode: ConvolutionMode
@@ -30,7 +30,7 @@ impl FastConvolver {
         // To match the broken pieces  (4+1 = 5 as in DAFX example) we will use buffer_size+1
         Self {
             impulse_response: ir,
-            buffer: RingBuffer::new(buffer_size+1, RingBuffer::new(buffer_size*buffer_size, Vec::new())),
+            buffer: RingBuffer::new(buffer_size+1, vec![0.0; max_block_size]),
             buffer_size: buffer_size,
             block_size: max_block_size,
             mode
@@ -50,40 +50,23 @@ impl FastConvolver {
 
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
         self.reset();
-        for (main_idx, (input_block, output_block)) in input.chunks(self.block_size).zip(output.chunks_mut(self.block_size)).enumerate() {
+        for (input_block, output_block) in input.chunks(self.block_size).zip(output.chunks_mut(self.block_size)) {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
-                println!("{main_idx}: {ir_idx} Iteration running ({})", self.buffer_size);
-
-                let output_loc = self.buffer.get_mut(ir_idx).unwrap();
-                if output_loc.is_full() {
-                    println!("Hrllo");
-
-                    output_loc.pop();
-                }
-                output_loc.push(vec![0.0; self.block_size]);
-                let output_temp = output_loc.get_mut(output_loc.get_write_index()).unwrap();
+                let output_temp = self.buffer.get_mut(ir_idx).unwrap();
                 let output_flush = match self.mode {
                     ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output_temp, self.block_size),
                     ConvolutionMode::FrequencyDomain => unimplemented!()
                 };
-                let output_loc = self.buffer.get_mut(ir_idx+1).unwrap();
-                if output_loc.is_full() {
-                    println!("Hrllo");
-                    output_loc.pop();
+                let output_temp = self.buffer.get_mut(ir_idx+1).unwrap();
+                for (output_temp_value, flush_value) in output_temp.iter_mut().zip(output_flush.iter()){
+                    *output_temp_value+=flush_value
                 }
-                output_loc.push(output_flush);
             }
             let curr_buffer = self.buffer.pop().unwrap();
-            // println!("{}", curr_buffer.len());
-            for offset in 0..curr_buffer.len() {
-                let result_value = curr_buffer.get(offset).unwrap();
-                // println!("{:?}",result_value);
-                // thread::sleep(Duration::from_secs(10));
-                for (idx, sample) in output_block.iter_mut().enumerate() {
-                    *sample += result_value[idx];
-                }
+            for (sample, output_sample) in curr_buffer.into_iter().zip(output_block.iter_mut()) {
+                *output_sample = sample;
             }
-            self.buffer.push(RingBuffer::new(self.buffer_size*self.buffer_size, Vec::new()));
+            self.buffer.push(vec![0.0; self.block_size]);
         }   
     }
 
@@ -102,20 +85,18 @@ impl FastConvolver {
     }
 
     pub fn get_output_tail_size(&self) -> usize {
-        self.impulse_response.len()
+        self.buffer.len()*self.block_size
     }
 
     pub fn flush(&mut self, output: &mut [f32]) {
         let mut start_pointer = 0;
         while self.buffer.len()>0 {
             let curr_buffer = self.buffer.pop().unwrap();
-            for offset in 0..curr_buffer.len() {
-                let result_value = curr_buffer.get(offset).unwrap();
-                for idx in 0..self.block_size {
-                    output[start_pointer + idx] += result_value[idx]
-                }
+            let block_size = curr_buffer.len();
+            for idx in 0..block_size {
+                output[start_pointer + idx] += curr_buffer[idx];
             }
-            start_pointer += self.block_size;
+            start_pointer += block_size;
         }
     }
 }
