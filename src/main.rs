@@ -59,9 +59,6 @@ fn main() {
             samples.push(0);
         }
     }
-    // println!("{} {}", impulse_response.len(), samples.len());
-    // convolver.process(&samples, &mut output_samples);
-    // let mut output_samples = Vec::new();
     let mut max_sample_value = 0.0;
 
     // while let Ok(block) = reader.samples::<i16>().take(block_size).collect::<Result<Vec<_>, _>>() {
@@ -73,8 +70,6 @@ fn main() {
     println!("Process Time: {}", now.elapsed().as_millis());
 
     let mut output_samples = process_block.output_block;
-    // process_block.write_output_samples(&mut writer).unwrap();
-    // if block.len() < block_size { 
     let ir_len = convolver.get_output_tail_size();
     let mut output = vec![0.0; ir_len];
 
