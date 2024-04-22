@@ -1,4 +1,3 @@
-use std::cmp::max;
 use rustfft::{FftDirection, Fft, num_complex::Complex, algorithm::Radix4};
 
 #[derive(Debug, Clone, Copy)]
@@ -48,8 +47,15 @@ impl FastConvolver {
 
     #[allow(dead_code)]
     pub fn set_block_size(&mut self, block_size: usize){
-        let len_ir = self.impulse_response.len() - 1;
-        self.block_size = max(block_size, len_ir);
+        self.buffer = vec![0.0; (self.impulse_response.len()/block_size + 2)*block_size];
+        self.block_size = block_size; 
+        match self.fft {
+            None => (),
+            Some(_) => {
+                self.fft = Some(Radix4::new(block_size*2, FftDirection::Forward));
+                self.ifft = Some(Radix4::new(block_size*2, FftDirection::Inverse));
+            }
+        }
     }
 
     pub fn add_buffer(&mut self, output: &mut [f32]) {
