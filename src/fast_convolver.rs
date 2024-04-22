@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::{cmp::max, process::id};
 use rustfft::{FftPlanner, FftDirection, Fft, num_complex::Complex, algorithm::Radix4};
 use std::sync::Arc;
 
@@ -41,11 +41,21 @@ impl FastConvolver {
         self.block_size = max(block_size, len_ir);
     }
 
+    pub fn add_buffer(&mut self, output: &mut [f32]) {
+        let length = self.get_output_tail_size();
+        for idx in 0..(length-self.block_size) {
+            if idx < self.block_size {
+                output[idx] = self.buffer[idx];
+            }
+            self.buffer[idx] = self.buffer[idx+self.block_size]
+        }
+    }
+
     pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
+        self.add_buffer(output);
         let output_len = output.len();
         for (main_idx, input_block) in input.chunks(self.block_size).enumerate() {
             for (ir_idx, ir_block) in self.impulse_response.chunks(self.block_size).enumerate() {
-                // println!("{} {}",main_idx, ir_idx);
                 match self.mode {
                     ConvolutionMode::TimeDomain => FastConvolver::time_convolve(input_block, ir_block, output, &mut self.buffer, (main_idx+ir_idx) * self.block_size, output_len),
                     ConvolutionMode::FrequencyDomain => FastConvolver::frequency_convolve(input_block, ir_block, output, &mut self.buffer, (main_idx+ir_idx) * self.block_size, self.block_size, output_len, &self.fft, &self.ifft),
