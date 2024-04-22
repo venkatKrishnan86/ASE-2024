@@ -1,6 +1,5 @@
-use std::{cmp::max, process::id};
-use rustfft::{FftPlanner, FftDirection, Fft, num_complex::Complex, algorithm::Radix4};
-use std::sync::Arc;
+use std::cmp::max;
+use rustfft::{FftDirection, Fft, num_complex::Complex, algorithm::Radix4};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvolutionMode {
@@ -41,11 +40,13 @@ impl FastConvolver {
         }
     }
 
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.impulse_response.clear();
     }
 
+    #[allow(dead_code)]
     pub fn set_block_size(&mut self, block_size: usize){
         let len_ir = self.impulse_response.len() - 1;
         self.block_size = max(block_size, len_ir);
@@ -147,7 +148,6 @@ impl FastConvolver {
 #[cfg(test)]
 mod tests {
     use rand::Rng;
-    use rustfft::num_traits::Pow;
     use super::*;
 
     #[test]

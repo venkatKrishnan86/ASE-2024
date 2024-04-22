@@ -43,6 +43,7 @@ impl ProcessBlocks {
         (&self.input_block, &mut self.output_block)
     }
 
+    #[allow(dead_code)]
     pub fn write_output_samples(&mut self, writer: &mut WavWriter<BufWriter<File>>) -> Result<(), hound::Error> {
         let new_output_block = transpose(vec![self.output_block.clone()]);
 
