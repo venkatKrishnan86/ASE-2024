@@ -108,15 +108,15 @@ impl FastConvolver {
         for (idx, input) in input_values.iter().enumerate() {
             let index = start_idx + idx;
             if index < output_len {
-                output[index] += input.re;
+                output[index] += input.re/(block_size as f32 * 2.0);
             } else {
-                flush_buffer[index - output_len] += input.re;
+                flush_buffer[index - output_len] += input.re/(block_size as f32 * 2.0);
             }
         }
     }
 
     pub fn get_output_tail_size(&self) -> usize {
-        (self.buffer.len()+1)*self.block_size
+        self.impulse_response.len()/self.block_size + 2*self.block_size
     }
 
     pub fn flush(&mut self, output: &mut Vec<f32>) {
@@ -133,13 +133,30 @@ mod tests {
 
     #[test]
     fn test_identity_impulse_response() {
+        let block_size = 16;
         let mut rng = rand::thread_rng();
         let mut impulse_response = vec![0.0; 50];
         impulse_response[0] = 1.0;
         println!("impulse_response : {:?}", impulse_response);
-        let input_signal: Vec<f32> = (0..10).map(|_| rng.gen::<f32>()).collect();
-        let mut output_signal: Vec<f32> = vec![0.0_f32; 10];
-        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, 10);
+        let input_signal: Vec<f32> = (0..block_size).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0_f32; block_size];
+        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, block_size);
+        convolver.process(&input_signal, &mut output_signal);
+        for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
+            assert!((out_val - in_val).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn test_identity_impulse_response_frequency() {
+        let block_size = 16;
+        let mut rng = rand::thread_rng();
+        let mut impulse_response = vec![0.0; 50];
+        impulse_response[0] = 1.0;
+        println!("impulse_response : {:?}", impulse_response);
+        let input_signal: Vec<f32> = (0..block_size).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0_f32; block_size];
+        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::FrequencyDomain, block_size);
         convolver.process(&input_signal, &mut output_signal);
         for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
             assert!((out_val - in_val).abs() < 1e-5);
@@ -148,16 +165,17 @@ mod tests {
 
     #[test]
     fn test_flush() {
+        let block_size = 16;
         let mut rng = rand::thread_rng();
         let mut impulse_response = vec![0.0; 50];
         impulse_response[0] = 1.0;
 
         let gain = rng.gen::<f32>();
 
-        impulse_response[10] = gain; // Will delay the whole input by 10 samples with a random gain
-        let input_signal: Vec<f32> = (0..10).map(|_| rng.gen::<f32>()).collect();
-        let mut output_signal: Vec<f32> = vec![0.0_f32; 10];
-        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, 10);
+        impulse_response[block_size] = gain; // Will delay the whole input by 10 samples with a random gain
+        let input_signal: Vec<f32> = (0..block_size).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0_f32; block_size];
+        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, block_size);
         convolver.process(&input_signal, &mut output_signal);
         for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
             assert!((out_val - in_val).abs() < 1e-5);
@@ -165,19 +183,51 @@ mod tests {
 
         // The reverb tail is checking if the delay is done correctly
         let tail_len = convolver.get_output_tail_size();
+        println!("{}", tail_len);
         let mut reverb_tail: Vec<f32> = vec![0.0_f32; tail_len];
         convolver.flush(&mut reverb_tail);
-        for i in 0..10{
+        for i in 0..block_size{
             assert!((reverb_tail[i] - input_signal[i]*gain).abs() < 1e-5);   // First 10 tail values must be the delayed input signal times the random gain
         }
-        for i in 10..tail_len{
+        for i in block_size..tail_len{
+            assert!(reverb_tail[i].abs() < 1e-5);                            // Rest of the values need to be 0.0
+        }
+    }
+
+    #[test]
+    fn test_flush_frequency() {
+        let block_size = 16;
+        let mut rng = rand::thread_rng();
+        let mut impulse_response = vec![0.0; 50];
+        impulse_response[0] = 1.0;
+
+        let gain = rng.gen::<f32>();
+
+        impulse_response[block_size] = gain; // Will delay the whole input by 10 samples with a random gain
+        let input_signal: Vec<f32> = (0..block_size).map(|_| rng.gen::<f32>()).collect();
+        let mut output_signal: Vec<f32> = vec![0.0_f32; block_size];
+        let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::FrequencyDomain, block_size);
+        convolver.process(&input_signal, &mut output_signal);
+        for (in_val, out_val) in input_signal.iter().zip(output_signal.iter()){
+            assert!((out_val - in_val).abs() < 1e-5);
+        }
+
+        // The reverb tail is checking if the delay is done correctly
+        let tail_len = convolver.get_output_tail_size();
+        println!("{}", tail_len);
+        let mut reverb_tail: Vec<f32> = vec![0.0_f32; tail_len];
+        convolver.flush(&mut reverb_tail);
+        for i in 0..block_size{
+            assert!((reverb_tail[i] - input_signal[i]*gain).abs() < 1e-5);   // First 10 tail values must be the delayed input signal times the random gain
+        }
+        for i in block_size..tail_len{
             assert!(reverb_tail[i].abs() < 1e-5);                            // Rest of the values need to be 0.0
         }
     }
 
     #[test]
     fn test_trial() {
-        let block_size = 10;
+        let block_size = 16;
         let mut impulse_response = vec![0.0; 130];
         impulse_response[0] = 1.0;
         let mut rng = rand::thread_rng();

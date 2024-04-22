@@ -2,7 +2,7 @@ use hound::WavWriter;
 use rustfft::num_traits::abs;
 
 use crate::fast_convolver::{ConvolutionMode, FastConvolver};
-use std::time::Instant;
+use std::{process, time::Instant};
 
 mod fast_convolver;
 mod utils;
@@ -20,14 +20,14 @@ fn main() {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} <input wave filename> <output wave filename> <impulse response wave filename>", args[0]);
+        eprintln!("Usage: {} <input wave filename> <output wave filename> <impulse response wave filename> <T/F (Time Domain / Frequency Domain)>", args[0]);
         return;
     }
 
     // Open the input wave file
     let mut reader = hound::WavReader::open(&args[1]).unwrap();
     let spec = reader.spec();
-    let block_size = 1024;
+    let block_size = 2048;
 
     // Ensure the audio is mono
     if spec.channels != 1 {
@@ -42,7 +42,16 @@ fn main() {
     let impulse_response: Vec<f32> = impulse_reader.samples::<i16>()
         .map(|s| i16_to_f32(s.unwrap()))
         .collect();
-    let mut convolver = FastConvolver::new(impulse_response, ConvolutionMode::FrequencyDomain, block_size);
+
+    let mut convolver;
+    if args[4]=="T" {
+        convolver = FastConvolver::new(impulse_response, ConvolutionMode::TimeDomain, block_size);
+    } else if args[4]=="F" {
+        convolver = FastConvolver::new(impulse_response, ConvolutionMode::FrequencyDomain, block_size);
+    } else {
+        process::exit(0);
+    }
+    
 
     // Set up WAV writer with the same specifications as the input
     // let output_path = Path::new(&args[2]);
